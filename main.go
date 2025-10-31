@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"bubbletea-poc/audio"
-	"bubbletea-poc/player"
-	"bubbletea-poc/smplrmidi"
-	"bubbletea-poc/wavfile"
+	"smplr/audio"
+	"smplr/player"
+	"smplr/smplrmidi"
+	"smplr/wavfile"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

@@ -1,4 +1,4 @@
-module bubbletea-poc
+module smplr
 
 go 1.25.1
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"bubbletea-poc/wavfile"
+	"smplr/wavfile"
 )
 
 func renderBrailleWaveform(peaks []float64, width int) string {

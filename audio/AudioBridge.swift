@@ -198,7 +198,7 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
 
         // Get all applications except ourselves
         let excludedApps = content.applications.filter { app in
-            app.bundleIdentifier.contains("bubbletea-poc")
+            app.bundleIdentifier.contains("smplr")
         }
 
         // Create filter

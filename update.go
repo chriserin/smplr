@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"bubbletea-poc/audio"
-	"bubbletea-poc/mappings"
-	"bubbletea-poc/wavfile"
+	"smplr/audio"
+	"smplr/mappings"
+	"smplr/wavfile"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"

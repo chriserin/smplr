@@ -3,9 +3,9 @@
 set -e
 
 # If executable exists, remove it
-if [ -f ./bubbletea-poc ]; then
+if [ -f ./smplr ]; then
   echo "Removing existing executable..."
-  rm ./bubbletea-poc
+  rm ./smplr
 fi
 
 echo "Compiling Swift audio bridge..."

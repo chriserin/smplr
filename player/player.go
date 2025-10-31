@@ -1,8 +1,8 @@
 package player
 
 import (
-	"bubbletea-poc/audio"
-	"bubbletea-poc/wavfile"
+	"smplr/audio"
+	"smplr/wavfile"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"gitlab.com/gomidi/midi/v2"
