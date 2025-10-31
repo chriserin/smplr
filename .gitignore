@@ -1,2 +1,7 @@
+# Test/Debug files that may exist in the directory
 *.wav
 *.log
+
+# Compilation artifacts
+audio/AudioBridge.o
+smplr
