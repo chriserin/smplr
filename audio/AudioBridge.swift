@@ -12,7 +12,6 @@ class AudioEngineManager {
     private let engine: AVAudioEngine
     private var players: [Int32: AVAudioPlayerNode] = [:]
     private var playerBuffers: [Int32: AVAudioPCMBuffer] = [:]
-    private var timePitchUnits: [Int32: AVAudioUnitTimePitch] = [:]
     private var nextPlayerID: Int32 = 1
 
     init() {
@@ -47,20 +46,16 @@ class AudioEngineManager {
 
         try audioFile.read(into: buffer)
 
-        // Create and connect the player node with the actual audio format
+        // Create and connect the player node directly to mixer (no real-time pitch shifting)
         let playerNode = AVAudioPlayerNode()
-        let timePitch = AVAudioUnitTimePitch()
 
         engine.attach(playerNode)
-        engine.attach(timePitch)
 
-        // Connect: player -> timePitch -> mixer
-        engine.connect(playerNode, to: timePitch, format: format)
-        engine.connect(timePitch, to: engine.mainMixerNode, format: format)
+        // Connect: player -> mixer (direct, low latency)
+        engine.connect(playerNode, to: engine.mainMixerNode, format: format)
 
         players[playerID] = playerNode
         playerBuffers[playerID] = buffer
-        timePitchUnits[playerID] = timePitch
 
         return playerID
     }
@@ -75,15 +70,8 @@ class AudioEngineManager {
         engine.disconnectNodeOutput(playerNode)
         engine.detach(playerNode)
 
-        if let timePitch = timePitchUnits[playerID] {
-            engine.disconnectNodeOutput(timePitch)
-            engine.detach(timePitch)
-        }
-
         players.removeValue(forKey: playerID)
         playerBuffers.removeValue(forKey: playerID)
-        timePitchUnits.removeValue(forKey: playerID)
-        print("Destroyed player with ID: \(playerID)")
     }
 
     func playFile(_ playerID: Int32, _ fileURL: URL, cents: Float) throws {
@@ -93,11 +81,8 @@ class AudioEngineManager {
                 userInfo: [NSLocalizedDescriptionKey: "Player ID \(playerID) not found"])
         }
 
-        // Set pitch shift
-        if let timePitch = timePitchUnits[playerID] {
-            timePitch.pitch = cents
-            timePitch.overlap = 8.0
-        }
+        // No real-time pitch shifting - files are pre-rendered at the correct pitch
+        // cents parameter is ignored (should be 0)
 
         // If buffer is loaded, use it; otherwise fall back to file
         if let buffer = playerBuffers[playerID] {
@@ -122,10 +107,8 @@ class AudioEngineManager {
                 userInfo: [NSLocalizedDescriptionKey: "Player ID \(playerID) not found"])
         }
 
-        // Set pitch shift
-        if let timePitch = timePitchUnits[playerID] {
-            timePitch.pitch = cents
-        }
+        // No real-time pitch shifting - files are pre-rendered at the correct pitch
+        // cents parameter is ignored (should be 0)
 
         // If buffer is loaded, create a segment buffer; otherwise use file
         if let sourceBuffer = playerBuffers[playerID] {
@@ -540,6 +523,159 @@ public func SwiftAudio_trimFile(
         return 0
     } catch {
         print("Error trimming file: \(error)")
+        return 1
+    }
+}
+
+@_cdecl("SwiftAudio_renderPitchedFile")
+public func SwiftAudio_renderPitchedFile(
+    _ sourceFilename: UnsafePointer<CChar>, _ targetFilename: UnsafePointer<CChar>, _ cents: Float
+) -> Int32 {
+    let sourceStr = String(cString: sourceFilename)
+    let targetStr = String(cString: targetFilename)
+    let sourceURL = URL(fileURLWithPath: sourceStr)
+    let targetURL = URL(fileURLWithPath: targetStr)
+
+    do {
+        // Load source audio file
+        let sourceFile = try AVAudioFile(forReading: sourceURL)
+        let sourceFormat = sourceFile.processingFormat
+        let sourceLength = sourceFile.length
+
+        // Read source buffer
+        guard
+            let sourceBuffer = AVAudioPCMBuffer(
+                pcmFormat: sourceFormat,
+                frameCapacity: AVAudioFrameCount(sourceLength)
+            )
+        else {
+            print("Error: Failed to create source buffer")
+            return 1
+        }
+        try sourceFile.read(into: sourceBuffer)
+        sourceBuffer.frameLength = AVAudioFrameCount(sourceLength)
+
+        // Create offline rendering engine
+        let engine = AVAudioEngine()
+        let player = AVAudioPlayerNode()
+        let timePitch = AVAudioUnitTimePitch()
+
+        // Configure pitch shift with high quality for offline rendering
+        timePitch.pitch = cents
+        timePitch.overlap = 32.0  // High quality
+
+        // Enable manual rendering mode BEFORE attaching nodes
+        let maxFrames: AVAudioFrameCount = 4096
+        try engine.enableManualRenderingMode(
+            .offline, format: sourceFormat, maximumFrameCount: maxFrames)
+
+        // Attach and connect nodes
+        engine.attach(player)
+        engine.attach(timePitch)
+        engine.connect(player, to: timePitch, format: sourceFormat)
+        engine.connect(timePitch, to: engine.mainMixerNode, format: sourceFormat)
+
+        // Start engine
+        try engine.start()
+
+        // Schedule source buffer
+        player.scheduleBuffer(sourceBuffer, at: nil, options: .interrupts)
+
+        // Create output buffer for collecting rendered audio
+        var renderedFrames: [[Float]] = Array(repeating: [], count: Int(sourceFormat.channelCount))
+
+        // Create render buffer
+        guard
+            let renderBuffer = AVAudioPCMBuffer(
+                pcmFormat: engine.manualRenderingFormat,
+                frameCapacity: engine.manualRenderingMaximumFrameCount
+            )
+        else {
+            print("Error: Failed to create render buffer")
+            return 1
+        }
+
+        // Start playback
+        player.play()
+
+        // Manual render loop - proper exit condition from documentation
+        var iterationCount = 0
+        let maxIterations = 100000  // Safety limit
+
+        while engine.manualRenderingSampleTime < sourceFile.length {
+            iterationCount += 1
+
+            if iterationCount > maxIterations {
+                print("ERROR: Exceeded max iterations (\(maxIterations)), forcing exit")
+                return 1
+            }
+
+            let framesToRender = renderBuffer.frameCapacity
+            let status = try engine.renderOffline(framesToRender, to: renderBuffer)
+
+            switch status {
+            case .success:
+                // Copy rendered frames to output
+                let frameLength = Int(renderBuffer.frameLength)
+                if frameLength > 0 {
+                    for channel in 0..<Int(sourceFormat.channelCount) {
+                        let channelData = renderBuffer.floatChannelData![channel]
+                        let samples = Array(
+                            UnsafeBufferPointer(start: channelData, count: frameLength))
+                        renderedFrames[channel].append(contentsOf: samples)
+                    }
+                }
+            case .insufficientDataFromInputNode:
+                // This is expected during rendering, continue
+                break
+            case .cannotDoInCurrentContext, .error:
+                print("ERROR: Rendering error at iteration \(iterationCount): \(status)")
+                return 1
+            @unknown default:
+                print("ERROR: Unknown render status at iteration \(iterationCount)")
+                return 1
+            }
+        }
+
+        // Create output buffer with rendered data
+        let totalFrames = renderedFrames[0].count
+        guard
+            let outputBuffer = AVAudioPCMBuffer(
+                pcmFormat: sourceFormat,
+                frameCapacity: AVAudioFrameCount(totalFrames)
+            )
+        else {
+            print("Error: Failed to create output buffer")
+            return 1
+        }
+
+        // Copy rendered data to output buffer
+        for channel in 0..<Int(sourceFormat.channelCount) {
+            let channelData = outputBuffer.floatChannelData![channel]
+            for (index, sample) in renderedFrames[channel].enumerated() {
+                channelData[index] = sample
+            }
+        }
+        outputBuffer.frameLength = AVAudioFrameCount(totalFrames)
+
+        // Remove target file if it exists
+        if FileManager.default.fileExists(atPath: targetURL.path) {
+            try FileManager.default.removeItem(at: targetURL)
+        }
+
+        // Write to target file
+        let outputFile = try AVAudioFile(
+            forWriting: targetURL,
+            settings: sourceFile.fileFormat.settings,
+            commonFormat: .pcmFormatFloat32,
+            interleaved: false
+        )
+        try outputFile.write(from: outputBuffer)
+
+        return 0
+
+    } catch {
+        print("Error rendering pitched file: \(error)")
         return 1
     }
 }

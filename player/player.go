@@ -66,8 +66,13 @@ func (p *Player) playNote(channel uint8, note uint8) {
 	for _, file := range *p.files {
 		if file.MidiChannel == midiChannel && file.MidiNote == midiNote {
 			if file.Metadata != nil {
-				cents := float32(file.Pitch * 100)
-				err := p.audio.PlayRegion(file.PlayerId, file.Name, file.StartFrame, file.EndFrame, cents)
+				// Use pitched file if it exists, otherwise use original
+				filename := file.Name
+				if file.PitchedFileName != "" {
+					filename = file.PitchedFileName
+				}
+				// No real-time pitch shifting - files are pre-rendered
+				err := p.audio.PlayRegion(file.PlayerId, filename, file.StartFrame, file.EndFrame, 0)
 				if err != nil {
 					panic("Error playing region: " + err.Error())
 				}

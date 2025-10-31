@@ -27,6 +27,7 @@ extern int SwiftAudio_stopRecording(void);
 extern int SwiftAudio_playFile(int playerID, const char* filename, float cents);
 extern int SwiftAudio_playRegion(int playerID, const char* filename, int startFrame, int endFrame, float cents);
 extern int SwiftAudio_trimFile(const char* filename, int startFrame, int endFrame);
+extern int SwiftAudio_renderPitchedFile(const char* sourceFilename, const char* targetFilename, float cents);
 extern void SwiftAudio_setCompletionCallback(void (*callback)(int));
 */
 import "C"
@@ -68,6 +69,7 @@ type Audio interface {
 	PlayFile(playerID int, filename string, cents float32) error
 	PlayRegion(playerID int, filename string, startFrame int, endFrame int, cents float32) error
 	TrimFile(filename string, startFrame int, endFrame int) error
+	RenderPitchedFile(sourceFilename string, targetFilename string, cents float32) error
 }
 
 // StubAudio is a stub implementation of the Audio interface
@@ -173,6 +175,25 @@ func (a *StubAudio) PlayRegion(playerID int, filename string, startFrame int, en
 	// Stub implementation - just returns nil
 	// Real implementation would play from startFrame to endFrame
 	return nil
+}
+
+// RenderPitchedFile creates a new audio file with pitch shifting applied offline
+func (a *StubAudio) RenderPitchedFile(sourceFilename string, targetFilename string, cents float32) error {
+	// Stub implementation - just copy the source file to target
+	srcFile, err := os.Open(sourceFilename)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(targetFilename)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	_, err = io.Copy(dstFile, srcFile)
+	return err
 }
 
 // TrimFile rewrites the audio file to only contain frames from startFrame to endFrame
@@ -403,6 +424,21 @@ func (a *SwiftAudio) TrimFile(filename string, startFrame int, endFrame int) err
 	result := C.SwiftAudio_trimFile(cFilename, C.int(startFrame), C.int(endFrame))
 	if result != 0 {
 		return fmt.Errorf("failed to trim file")
+	}
+	return nil
+}
+
+// RenderPitchedFile creates a new audio file with pitch shifting applied offline
+func (a *SwiftAudio) RenderPitchedFile(sourceFilename string, targetFilename string, cents float32) error {
+	cSource := C.CString(sourceFilename)
+	defer C.free(unsafe.Pointer(cSource))
+
+	cTarget := C.CString(targetFilename)
+	defer C.free(unsafe.Pointer(cTarget))
+
+	result := C.SwiftAudio_renderPitchedFile(cSource, cTarget, C.float(cents))
+	if result != 0 {
+		return fmt.Errorf("failed to render pitched file")
 	}
 	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -31,16 +32,17 @@ type Metadata struct {
 
 // WavFile represents a WAV file with its MIDI mapping and playback state
 type WavFile struct {
-	PlayingCount int // Reference count of active playbacks
-	Loading      bool
-	MidiChannel  int
-	MidiNote     int
-	Pitch        int // Pitch shift in semitones (-12 to 12)
-	StartFrame   int
-	EndFrame     int
-	PlayerId     int
-	Metadata     *Metadata
-	Name         string
+	PlayingCount     int // Reference count of active playbacks
+	Loading          bool
+	MidiChannel      int
+	MidiNote         int
+	Pitch            int    // Pitch shift in semitones (-12 to 12)
+	PitchedFileName  string // Path to offline-rendered pitched file, empty if pitch is 0
+	StartFrame       int
+	EndFrame         int
+	PlayerId         int
+	Metadata         *Metadata
+	Name             string
 }
 
 type wavHeader struct {
@@ -64,10 +66,45 @@ type MetadataLoadedMsg struct {
 	Err      error
 }
 
+// isPitchedFile checks if a filename matches the pattern for auto-generated pitched files
+func isPitchedFile(filename string) bool {
+	return strings.Contains(filename, "_pitch_")
+}
+
+// GeneratePitchedFilename creates a filename for a pitched version of the audio file
+func GeneratePitchedFilename(originalFilename string, pitch int) string {
+	if pitch == 0 {
+		return ""
+	}
+
+	ext := filepath.Ext(originalFilename)
+	nameWithoutExt := strings.TrimSuffix(originalFilename, ext)
+	cents := pitch * 100
+
+	var sign string
+	if cents >= 0 {
+		sign = "+"
+	} else {
+		sign = ""
+	}
+
+	return fmt.Sprintf("%s_pitch_%s%d%s", nameWithoutExt, sign, cents, ext)
+}
+
+// PitchedFileExists checks if a pitched file already exists on disk
+func PitchedFileExists(filename string) bool {
+	if filename == "" {
+		return false
+	}
+	_, err := os.Stat(filename)
+	return err == nil
+}
+
 // LoadFiles loads all WAV files from the current directory
 // and assigns incremental MIDI note numbers starting from 1.
 // It returns WavFile structs without metadata immediately.
 // Metadata is loaded concurrently in background goroutines.
+// Excludes auto-generated pitched files (files with "_pitch_" in the name).
 func LoadFiles(metadataChan chan<- MetadataLoadedMsg) []WavFile {
 	entries, err := os.ReadDir(".")
 	if err != nil {
@@ -79,6 +116,11 @@ func LoadFiles(metadataChan chan<- MetadataLoadedMsg) []WavFile {
 	note := 1
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(strings.ToLower(entry.Name()), ".wav") {
+			// Skip auto-generated pitched files
+			if isPitchedFile(entry.Name()) {
+				continue
+			}
+
 			wavFiles = append(wavFiles, WavFile{
 				Name:        entry.Name(),
 				MidiChannel: 1,

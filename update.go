@@ -49,6 +49,59 @@ func initialModel(files *[]wavfile.WavFile, audio audio.Audio) model {
 	}
 }
 
+// handlePitchChange handles offline rendering when pitch changes
+func (m *model) handlePitchChange(fileIndex int, newPitch int) error {
+	file := &(*m.files)[fileIndex]
+
+	// Generate pitched filename
+	pitchedFilename := wavfile.GeneratePitchedFilename(file.Name, newPitch)
+
+	// If pitch is 0, use original file
+	if newPitch == 0 {
+		file.PitchedFileName = ""
+
+		// Recreate player with original file
+		if file.PlayerId != 0 {
+			m.audio.DestroyPlayer(file.PlayerId)
+		}
+		playerID, err := m.audio.CreatePlayer(file.Name)
+		if err != nil {
+			return fmt.Errorf("failed to recreate player: %w", err)
+		}
+		file.PlayerId = playerID
+
+		return nil
+	}
+
+	// Check if pitched file already exists
+	if !wavfile.PitchedFileExists(pitchedFilename) {
+		// Render pitched file
+		cents := float32(newPitch * 100)
+
+		err := m.audio.RenderPitchedFile(file.Name, pitchedFilename, cents)
+
+		if err != nil {
+			return fmt.Errorf("failed to render pitched file: %w", err)
+		}
+	}
+
+	// Update PitchedFileName
+	file.PitchedFileName = pitchedFilename
+
+	// Recreate player with pitched file
+	if file.PlayerId != 0 {
+		m.audio.DestroyPlayer(file.PlayerId)
+	}
+
+	playerID, err := m.audio.CreatePlayer(pitchedFilename)
+	if err != nil {
+		return fmt.Errorf("failed to create player for pitched file: %w", err)
+	}
+	file.PlayerId = playerID
+
+	return nil
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case wavfile.PlaybackStartedMsg:
@@ -221,6 +274,12 @@ func (m model) handleEditingInput(mapping mappings.Mapping) (tea.Model, tea.Cmd)
 				(*m.files)[m.cursor].MidiNote = value
 			} else if m.editField == "pitch" && value >= -12 && value <= 12 {
 				(*m.files)[m.cursor].Pitch = value
+
+				// Handle offline rendering for pitch change
+				err := m.handlePitchChange(m.cursor, value)
+				if err != nil {
+					fmt.Printf("Error handling pitch change: %v\n", err)
+				}
 			}
 		}
 		m.editing = false
@@ -356,8 +415,13 @@ func (m model) handleNavigationInput(mapping mappings.Mapping) (tea.Model, tea.C
 
 	case mappings.PlayFile:
 		if !m.recording && len(*m.files) > 0 && m.cursor >= 0 && m.cursor < len(*m.files) {
-			cents := float32((*m.files)[m.cursor].Pitch * 100)
-			err := m.audio.PlayFile((*m.files)[m.cursor].PlayerId, (*m.files)[m.cursor].Name, cents)
+			// Use pitched file if it exists, otherwise use original
+			filename := (*m.files)[m.cursor].Name
+			if (*m.files)[m.cursor].PitchedFileName != "" {
+				filename = (*m.files)[m.cursor].PitchedFileName
+			}
+			// No real-time pitch shifting - files are pre-rendered
+			err := m.audio.PlayFile((*m.files)[m.cursor].PlayerId, filename, 0)
 			if err != nil {
 				panic("Error playing file from update: " + err.Error())
 			}
@@ -366,13 +430,18 @@ func (m model) handleNavigationInput(mapping mappings.Mapping) (tea.Model, tea.C
 
 	case mappings.PlayRegion:
 		if !m.recording && len(*m.files) > 0 && m.cursor >= 0 && m.cursor < len(*m.files) {
-			cents := float32((*m.files)[m.cursor].Pitch * 100)
+			// Use pitched file if it exists, otherwise use original
+			filename := (*m.files)[m.cursor].Name
+			if (*m.files)[m.cursor].PitchedFileName != "" {
+				filename = (*m.files)[m.cursor].PitchedFileName
+			}
+			// No real-time pitch shifting - files are pre-rendered
 			err := m.audio.PlayRegion(
 				(*m.files)[m.cursor].PlayerId,
-				(*m.files)[m.cursor].Name,
+				filename,
 				(*m.files)[m.cursor].StartFrame,
 				(*m.files)[m.cursor].EndFrame,
-				cents,
+				0,
 			)
 			if err != nil {
 				panic("Error playing region from update: " + err.Error())
