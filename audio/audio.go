@@ -1,7 +1,7 @@
 package audio
 
 /*
-#cgo LDFLAGS: ${SRCDIR}/AudioBridge.o
+#cgo LDFLAGS: ${SRCDIR}/AudioBridge.o -L/opt/homebrew/opt/rubberband/lib -lrubberband
 #include <stdlib.h>
 
 // Forward declare the Go callback

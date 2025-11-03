@@ -539,13 +539,14 @@ public func SwiftAudio_renderPitchedFile(
     do {
         // Load source audio file
         let sourceFile = try AVAudioFile(forReading: sourceURL)
-        let sourceFormat = sourceFile.processingFormat
+        let sampleRate = sourceFile.processingFormat.sampleRate
+        let channels = sourceFile.processingFormat.channelCount
         let sourceLength = sourceFile.length
 
         // Read source buffer
         guard
             let sourceBuffer = AVAudioPCMBuffer(
-                pcmFormat: sourceFormat,
+                pcmFormat: sourceFile.processingFormat,
                 frameCapacity: AVAudioFrameCount(sourceLength)
             )
         else {
@@ -555,108 +556,72 @@ public func SwiftAudio_renderPitchedFile(
         try sourceFile.read(into: sourceBuffer)
         sourceBuffer.frameLength = AVAudioFrameCount(sourceLength)
 
-        // Create offline rendering engine
-        let engine = AVAudioEngine()
-        let player = AVAudioPlayerNode()
-        let timePitch = AVAudioUnitTimePitch()
+        // Calculate pitch ratio from semitones
+        let semitones = Double(cents) / 100.0
+        let pitchRatio = pow(2.0, semitones / 12.0)
 
-        // Configure pitch shift with high quality for offline rendering
-        timePitch.pitch = cents
-        timePitch.overlap = 32.0  // High quality
+        // Create Rubberband stretcher using C API
+        let options: RubberBandOptions = Int32(
+            RubberBandOptionProcessOffline.rawValue
+                | RubberBandOptionPitchHighQuality.rawValue
+                | RubberBandOptionChannelsApart.rawValue
+                | RubberBandOptionEngineFiner.rawValue
+        )
 
-        // Enable manual rendering mode BEFORE attaching nodes
-        let maxFrames: AVAudioFrameCount = 4096
-        try engine.enableManualRenderingMode(
-            .offline, format: sourceFormat, maximumFrameCount: maxFrames)
+        let rb = rubberband_new(
+            UInt32(sampleRate),
+            UInt32(channels),
+            options,
+            1.0,  // Time ratio (no time stretching)
+            pitchRatio
+        )
 
-        // Attach and connect nodes
-        engine.attach(player)
-        engine.attach(timePitch)
-        engine.connect(player, to: timePitch, format: sourceFormat)
-        engine.connect(timePitch, to: engine.mainMixerNode, format: sourceFormat)
-
-        // Start engine
-        try engine.start()
-
-        // Schedule source buffer
-        player.scheduleBuffer(sourceBuffer, at: nil, options: .interrupts)
-
-        // Create output buffer for collecting rendered audio
-        var renderedFrames: [[Float]] = Array(repeating: [], count: Int(sourceFormat.channelCount))
-
-        // Create render buffer
-        guard
-            let renderBuffer = AVAudioPCMBuffer(
-                pcmFormat: engine.manualRenderingFormat,
-                frameCapacity: engine.manualRenderingMaximumFrameCount
-            )
-        else {
-            print("Error: Failed to create render buffer")
+        guard rb != nil else {
+            print("Error: Failed to create Rubberband stretcher")
             return 1
         }
+        defer { rubberband_delete(rb) }
 
-        // Start playback
-        player.play()
+        // Set expected input duration and max process size
+        rubberband_set_expected_input_duration(rb, UInt32(sourceLength))
+        rubberband_set_max_process_size(rb, UInt32(sourceLength))
 
-        // Manual render loop - proper exit condition from documentation
-        var iterationCount = 0
-        let maxIterations = 100000  // Safety limit
-
-        while engine.manualRenderingSampleTime < sourceFile.length {
-            iterationCount += 1
-
-            if iterationCount > maxIterations {
-                print("ERROR: Exceeded max iterations (\(maxIterations)), forcing exit")
-                return 1
-            }
-
-            let framesToRender = renderBuffer.frameCapacity
-            let status = try engine.renderOffline(framesToRender, to: renderBuffer)
-
-            switch status {
-            case .success:
-                // Copy rendered frames to output
-                let frameLength = Int(renderBuffer.frameLength)
-                if frameLength > 0 {
-                    for channel in 0..<Int(sourceFormat.channelCount) {
-                        let channelData = renderBuffer.floatChannelData![channel]
-                        let samples = Array(
-                            UnsafeBufferPointer(start: channelData, count: frameLength))
-                        renderedFrames[channel].append(contentsOf: samples)
-                    }
-                }
-            case .insufficientDataFromInputNode:
-                // This is expected during rendering, continue
-                break
-            case .cannotDoInCurrentContext, .error:
-                print("ERROR: Rendering error at iteration \(iterationCount): \(status)")
-                return 1
-            @unknown default:
-                print("ERROR: Unknown render status at iteration \(iterationCount)")
-                return 1
-            }
+        // Prepare input pointers
+        var inputPtrs = [UnsafePointer<Float>?](repeating: nil, count: Int(channels))
+        for i in 0..<Int(channels) {
+            inputPtrs[i] = UnsafePointer(sourceBuffer.floatChannelData![i])
         }
 
-        // Create output buffer with rendered data
-        let totalFrames = renderedFrames[0].count
+        // Study and process (offline mode)
+        inputPtrs.withUnsafeBufferPointer { ptrsBuffer in
+            rubberband_study(rb, ptrsBuffer.baseAddress, UInt32(sourceLength), 1)
+            rubberband_process(rb, ptrsBuffer.baseAddress, UInt32(sourceLength), 1)
+        }
+
+        // Get output frame count
+        let outputFrames = Int(rubberband_available(rb))
+
         guard
             let outputBuffer = AVAudioPCMBuffer(
-                pcmFormat: sourceFormat,
-                frameCapacity: AVAudioFrameCount(totalFrames)
+                pcmFormat: sourceFile.processingFormat,
+                frameCapacity: AVAudioFrameCount(outputFrames)
             )
         else {
             print("Error: Failed to create output buffer")
             return 1
         }
 
-        // Copy rendered data to output buffer
-        for channel in 0..<Int(sourceFormat.channelCount) {
-            let channelData = outputBuffer.floatChannelData![channel]
-            for (index, sample) in renderedFrames[channel].enumerated() {
-                channelData[index] = sample
-            }
+        // Retrieve processed audio
+        var outputPtrs = [UnsafeMutablePointer<Float>?](repeating: nil, count: Int(channels))
+        for i in 0..<Int(channels) {
+            outputPtrs[i] = outputBuffer.floatChannelData![i]
         }
-        outputBuffer.frameLength = AVAudioFrameCount(totalFrames)
+
+        let retrieved = outputPtrs.withUnsafeMutableBufferPointer { ptrsBuffer in
+            rubberband_retrieve(rb, ptrsBuffer.baseAddress, UInt32(outputFrames))
+        }
+
+        outputBuffer.frameLength = AVAudioFrameCount(retrieved)
 
         // Remove target file if it exists
         if FileManager.default.fileExists(atPath: targetURL.path) {
