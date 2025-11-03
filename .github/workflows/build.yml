@@ -28,22 +28,31 @@ jobs:
 
       - name: Install Rubberband
         run: |
-          brew install rubberband
+          if [ "${{ matrix.arch }}" = "amd64" ]; then
+            # Install x86_64 version of rubberband
+            arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
+            arch -x86_64 /usr/local/bin/brew install rubberband
+          else
+            # Install arm64 version of rubberband
+            brew install rubberband
+          fi
 
       - name: Build Swift audio bridge
         run: |
-          # Set architecture-specific compiler flags
+          # Set architecture-specific compiler flags and library paths
           if [ "${{ matrix.arch }}" = "amd64" ]; then
             export ARCH_FLAGS="-target x86_64-apple-macos13"
+            export RUBBERBAND_PREFIX="/usr/local/opt/rubberband"
           else
             export ARCH_FLAGS="-target arm64-apple-macos13"
+            export RUBBERBAND_PREFIX="/opt/homebrew/opt/rubberband"
           fi
 
           cd audio
           swiftc -c -parse-as-library AudioBridge.swift -o AudioBridge.o \
             -import-objc-header rubberband-bridge.h \
-            -I/opt/homebrew/opt/rubberband/include \
-            -L/opt/homebrew/opt/rubberband/lib \
+            -I${RUBBERBAND_PREFIX}/include \
+            -L${RUBBERBAND_PREFIX}/lib \
             -lrubberband \
             ${ARCH_FLAGS}
           cd ..
@@ -54,12 +63,17 @@ jobs:
           GOARCH: ${{ matrix.arch }}
           CGO_ENABLED: 1
         run: |
-          # Set architecture-specific flags
+          # Set architecture-specific flags and library paths
           if [ "${{ matrix.arch }}" = "amd64" ]; then
             export ARCH_FLAGS="-arch x86_64"
+            export RUBBERBAND_PREFIX="/usr/local/opt/rubberband"
           else
             export ARCH_FLAGS="-arch arm64"
+            export RUBBERBAND_PREFIX="/opt/homebrew/opt/rubberband"
           fi
+
+          # Set CGO flags to use the correct rubberband library
+          export CGO_LDFLAGS="${ARCH_FLAGS} -L${RUBBERBAND_PREFIX}/lib"
 
           # Build the binary
           go build -ldflags "-s -w" -o smplr-darwin-${{ matrix.arch }}
