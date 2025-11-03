@@ -34,9 +34,9 @@ jobs:
         run: |
           # Set architecture-specific compiler flags
           if [ "${{ matrix.arch }}" = "amd64" ]; then
-            export ARCH_FLAGS="-target x86_64-apple-macos11"
+            export ARCH_FLAGS="-arch x86_64"
           else
-            export ARCH_FLAGS="-target arm64-apple-macos11"
+            export ARCH_FLAGS="-arch arm64"
           fi
 
           cd audio
