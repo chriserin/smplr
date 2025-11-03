@@ -26,6 +26,7 @@ type model struct {
 	windowWidth       int
 	markerStepSize    int    // number of frames to move marker with h/l
 	activeMarker      string // "start" or "end"
+	currentError      string // error message to display
 }
 
 func initialModel(files *[]wavfile.WavFile, audio audio.Audio) model {
@@ -304,6 +305,9 @@ func (m model) handleEditingInput(mapping mappings.Mapping) (tea.Model, tea.Cmd)
 }
 
 func (m model) handleNavigationInput(mapping mappings.Mapping) (tea.Model, tea.Cmd) {
+	// Clear any error on key press
+	m.currentError = ""
+
 	switch mapping.Command {
 	case mappings.Quit:
 		return m, tea.Quit
@@ -451,6 +455,10 @@ func (m model) handleNavigationInput(mapping mappings.Mapping) (tea.Model, tea.C
 
 	case mappings.TrimFile:
 		if !m.recording && len(*m.files) > 0 && m.cursor >= 0 && m.cursor < len(*m.files) {
+			if (*m.files)[m.cursor].Pitch != 0 {
+				m.currentError = "Cannot trim file with non-zero pitch. Reset pitch to 0 first."
+				return m, nil
+			}
 			err := m.audio.TrimFile(
 				(*m.files)[m.cursor].Name,
 				(*m.files)[m.cursor].StartFrame,

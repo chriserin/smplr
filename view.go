@@ -95,6 +95,14 @@ func (m model) View() string {
 		b.WriteString(recordingStyle.Render("● RECORDING") + "\n")
 	}
 
+	// Display error message if present
+	if m.currentError != "" {
+		errorStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("196")).
+			Bold(true)
+		b.WriteString(errorStyle.Render("ERROR: "+m.currentError) + "\n")
+	}
+
 	// Display waveform for the selected file (not while recording)
 	if !m.recording && len(*m.files) > 0 && m.cursor >= 0 && m.cursor < len(*m.files) {
 		b.WriteString("\n")
