@@ -100,6 +100,26 @@ func PitchedFileExists(filename string) bool {
 	return err == nil
 }
 
+// RemoveAllPitchedVersions removes all pitched versions of the given original file
+func RemoveAllPitchedVersions(originalFilename string) error {
+	ext := filepath.Ext(originalFilename)
+	nameWithoutExt := strings.TrimSuffix(originalFilename, ext)
+	pattern := fmt.Sprintf("%s_pitch_*%s", nameWithoutExt, ext)
+
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return fmt.Errorf("failed to find pitched files: %w", err)
+	}
+
+	for _, match := range matches {
+		if err := os.Remove(match); err != nil {
+			return fmt.Errorf("failed to remove %s: %w", match, err)
+		}
+	}
+
+	return nil
+}
+
 // LoadFiles loads all WAV files from the current directory
 // and assigns incremental MIDI note numbers starting from 1.
 // It returns WavFile structs without metadata immediately.

@@ -465,6 +465,11 @@ func (m model) handleNavigationInput(mapping mappings.Mapping) (tea.Model, tea.C
 				(*m.files)[m.cursor].EndFrame,
 			)
 			if err == nil {
+				// Remove all pitched versions of this file
+				if err := wavfile.RemoveAllPitchedVersions((*m.files)[m.cursor].Name); err != nil {
+					m.currentError = fmt.Sprintf("Warning: failed to remove pitched versions: %v", err)
+				}
+
 				// Reload metadata after trimming
 				metadata, err := wavfile.ReadMetadata((*m.files)[m.cursor].Name)
 				if err == nil {
