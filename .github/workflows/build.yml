@@ -1,0 +1,124 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.25'
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  # build macOS (smplr requires macOS for CoreAudio/AVFoundation)
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install Rubberband
+        run: |
+          brew install rubberband
+
+      - name: Build Swift audio bridge
+        run: |
+          # Set architecture-specific compiler flags
+          if [ "${{ matrix.arch }}" = "amd64" ]; then
+            export ARCH_FLAGS="-target x86_64-apple-macos11"
+          else
+            export ARCH_FLAGS="-target arm64-apple-macos11"
+          fi
+
+          cd audio
+          swiftc -c -parse-as-library AudioBridge.swift -o AudioBridge.o \
+            -import-objc-header rubberband-bridge.h \
+            -I/opt/homebrew/opt/rubberband/include \
+            -L/opt/homebrew/opt/rubberband/lib \
+            -lrubberband \
+            ${ARCH_FLAGS}
+          cd ..
+
+      - name: Build macOS binary
+        env:
+          GOOS: darwin
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 1
+        run: |
+          # Set architecture-specific flags
+          if [ "${{ matrix.arch }}" = "amd64" ]; then
+            export ARCH_FLAGS="-arch x86_64"
+          else
+            export ARCH_FLAGS="-arch arm64"
+          fi
+
+          # Build the binary
+          go build -ldflags "-s -w" -o smplr-darwin-${{ matrix.arch }}
+
+          # Verify the binary architecture
+          file smplr-darwin-${{ matrix.arch }}
+          lipo -info smplr-darwin-${{ matrix.arch }}
+
+      - name: Verify binary
+        run: |
+          file smplr-darwin-${{ matrix.arch }}
+          otool -L smplr-darwin-${{ matrix.arch }} || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: smplr-darwin-${{ matrix.arch }}-${{ github.sha }}
+          path: smplr-darwin-${{ matrix.arch }}
+
+  release:
+    needs: [build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Verify artifacts
+        run: |
+          ls -la smplr-*
+          file smplr-* || true
+
+      - name: Create release directories
+        run: |
+          mkdir -p output/smplr-macos-X86_64/bin
+          mkdir -p output/smplr-macos-arm64/bin
+
+          mv smplr-darwin-amd64 output/smplr-macos-X86_64/bin/smplr
+          mv smplr-darwin-arm64 output/smplr-macos-arm64/bin/smplr
+
+          # Make them executable
+          chmod +x output/*/bin/smplr
+
+          tar -cvzf smplr-macos-X86_64.tar.gz -C output smplr-macos-X86_64
+          tar -cvzf smplr-macos-arm64.tar.gz -C output smplr-macos-arm64
+
+          ./changelog.sh WITHINSTALL > release-notes.md
+          # if the github_ref has alpha or beta make this a prerelease
+          case "${GITHUB_REF}" in
+            *alpha*|*beta*)
+              gh release create --prerelease -F release-notes.md "${GITHUB_REF}" -- *.tar.gz
+              ;;
+            *)
+              gh release create -F release-notes.md "${GITHUB_REF}" -- *.tar.gz
+              ;;
+          esac

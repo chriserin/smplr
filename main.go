@@ -12,6 +12,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+const VERSION = "v0.1.0"
+
 func main() {
 	// Create channel for metadata loading
 	metadataChan := make(chan wavfile.MetadataLoadedMsg)
