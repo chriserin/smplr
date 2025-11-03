@@ -93,7 +93,6 @@ class AudioEngineManager {
                     callback(playerID)
                 }
             }
-            print("Latency " + String(playerNode.latency))
             playerNode.play()
         }
     }
@@ -297,14 +296,15 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
                     writer.add(writerInput)
                     assetWriterInput = writerInput
                 } else {
-                    print("Cannot add audio input to writer")
+                    print("ERROR: Cannot add audio input to writer")
                     return
                 }
 
                 writer.startWriting()
 
                 if writer.status == .failed {
-                    print("Writer failed: \(writer.error?.localizedDescription ?? "unknown")")
+                    print(
+                        "ERROR: Writer failed: \(writer.error?.localizedDescription ?? "unknown")")
                     return
                 }
 
@@ -321,14 +321,14 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
 
         if !input.append(sampleBuffer) {
             if let writer = assetWriter {
-                print("Failed to append sample buffer. Status: \(writer.status.rawValue)")
+                print("ERROR: Failed to append sample buffer. Status: \(writer.status.rawValue)")
             }
         }
     }
 
     // SCStreamDelegate method
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        print("Stream stopped with error: \(error.localizedDescription)")
+        print("ERROR: Stream stopped with error: \(error.localizedDescription)")
     }
 }
 
