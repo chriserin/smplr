@@ -12,7 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-const VERSION = "v0.1.0"
+const VERSION = "v0.1.0-alpha.1"
 
 func main() {
 	// Create channel for metadata loading
