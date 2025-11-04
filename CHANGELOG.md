@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [v0.1.0-alpha.4](https://github.com/chriserin/smplr/compare/v0.1.0-alpha.3...v0.1.0-alpha.4) (2025-11-04)
+
+### Features
+
+No new features.
+
+### Fixes
+
+No bug fixes.
+
+
 ## [v0.1.0-alpha.3](https://github.com/chriserin/smplr/compare/v0.1.0-alpha.2...v0.1.0-alpha.3) (2025-11-04)
 
 ### Features
