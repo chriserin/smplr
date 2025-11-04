@@ -26,15 +26,15 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Install Rubberband
+      - name: Install dependencies
         run: |
           if [ "${{ matrix.arch }}" = "amd64" ]; then
-            # Install x86_64 version of rubberband
+            # Install x86_64 versions
             arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
-            arch -x86_64 /usr/local/bin/brew install rubberband
+            arch -x86_64 /usr/local/bin/brew install rubberband libsamplerate
           else
-            # Install arm64 version of rubberband
-            brew install rubberband
+            # Install arm64 versions
+            brew install rubberband libsamplerate
           fi
 
       - name: Build Swift audio bridge
@@ -52,8 +52,6 @@ jobs:
           swiftc -c -parse-as-library AudioBridge.swift -o AudioBridge.o \
             -import-objc-header rubberband-bridge.h \
             -I${RUBBERBAND_PREFIX}/include \
-            -L${RUBBERBAND_PREFIX}/lib \
-            -lrubberband \
             ${ARCH_FLAGS}
           cd ..
 
@@ -63,19 +61,7 @@ jobs:
           GOARCH: ${{ matrix.arch }}
           CGO_ENABLED: 1
         run: |
-          # Set architecture-specific flags and library paths
-          if [ "${{ matrix.arch }}" = "amd64" ]; then
-            export ARCH_FLAGS="-arch x86_64"
-            export RUBBERBAND_PREFIX="/usr/local/opt/rubberband"
-          else
-            export ARCH_FLAGS="-arch arm64"
-            export RUBBERBAND_PREFIX="/opt/homebrew/opt/rubberband"
-          fi
-
-          # Set CGO flags to use the correct rubberband library
-          export CGO_LDFLAGS="${ARCH_FLAGS} -L${RUBBERBAND_PREFIX}/lib"
-
-          # Build the binary
+          # Build the binary (static linking configured in audio/audio.go)
           go build -ldflags "-s -w" -o smplr-darwin-${{ matrix.arch }}
 
           # Verify the binary architecture

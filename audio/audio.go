@@ -1,7 +1,8 @@
 package audio
 
 /*
-#cgo LDFLAGS: ${SRCDIR}/AudioBridge.o -L/opt/homebrew/opt/rubberband/lib -lrubberband
+#cgo darwin,arm64 LDFLAGS: ${SRCDIR}/AudioBridge.o /opt/homebrew/opt/rubberband/lib/librubberband.a /opt/homebrew/opt/libsamplerate/lib/libsamplerate.a -framework Accelerate
+#cgo darwin,amd64 LDFLAGS: ${SRCDIR}/AudioBridge.o /usr/local/opt/rubberband/lib/librubberband.a /usr/local/opt/libsamplerate/lib/libsamplerate.a -framework Accelerate
 #include <stdlib.h>
 
 // Forward declare the Go callback

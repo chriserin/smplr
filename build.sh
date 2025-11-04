@@ -13,8 +13,6 @@ cd audio
 swiftc -c -parse-as-library AudioBridge.swift -o AudioBridge.o \
   -import-objc-header rubberband-bridge.h \
   -I/opt/homebrew/opt/rubberband/include \
-  -L/opt/homebrew/opt/rubberband/lib \
-  -lrubberband \
   -target arm64-apple-macos13
 cd ..
 
