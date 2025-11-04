@@ -76,6 +76,7 @@ class AudioEngineManager {
 
     func playFile(_ playerID: Int32, _ fileURL: URL, cents: Float) throws {
         guard let playerNode = players[playerID] else {
+            print("Error: Player ID \(playerID) not found")
             throw NSError(
                 domain: "AudioEngineManager", code: -1,
                 userInfo: [NSLocalizedDescriptionKey: "Player ID \(playerID) not found"])

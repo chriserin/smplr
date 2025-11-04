@@ -380,6 +380,11 @@ func (m model) handleNavigationInput(mapping mappings.Mapping) (tea.Model, tea.C
 					Metadata:    metadata,
 					Loading:     false,
 				})
+				playerId, err := m.audio.CreatePlayer(m.recordingFilename)
+				if err != nil {
+					panic(err)
+				}
+				(*m.files)[len(*m.files)-1].PlayerId = playerId
 				// Select the newly added file
 				m.cursor = len(*m.files) - 1
 				m.scrollToSelection() // This will call updateMarkerStepSize()
