@@ -44,9 +44,9 @@ func renderBrailleWaveform(peaks []float64, width int) string {
 		}
 	}
 
-	for brailleCol := 0; brailleCol < width; brailleCol++ {
+	for brailleCol := range width {
 		// Process 2 columns (left and right dots)
-		for subCol := 0; subCol < 2; subCol++ {
+		for subCol := range 2 {
 			peakCol := brailleCol*2 + subCol
 			start := float64(peakCol) * peaksPerColumn
 			end := start + peaksPerColumn
@@ -151,26 +151,14 @@ func RenderWaveformForFile(metadata *wavfile.Metadata, width int, startFrame int
 	endInfo := fmt.Sprintf("End: %d", endFrame)
 
 	// Calculate centered positions for each info display
-	startInfoPos := startCharPos - len(startInfo)/2
-	if startInfoPos < 0 {
-		startInfoPos = 0
-	}
+	startInfoPos := max(startCharPos-len(startInfo)/2, 0)
 	if startInfoPos+len(startInfo) > width {
-		startInfoPos = width - len(startInfo)
-		if startInfoPos < 0 {
-			startInfoPos = 0
-		}
+		startInfoPos = max(width-len(startInfo), 0)
 	}
 
-	endInfoPos := endCharPos - len(endInfo)/2
-	if endInfoPos < 0 {
-		endInfoPos = 0
-	}
+	endInfoPos := max(endCharPos-len(endInfo)/2, 0)
 	if endInfoPos+len(endInfo) > width {
-		endInfoPos = width - len(endInfo)
-		if endInfoPos < 0 {
-			endInfoPos = 0
-		}
+		endInfoPos = max(width-len(endInfo), 0)
 	}
 
 	// Check if the info displays would overlap
