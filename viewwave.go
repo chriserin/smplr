@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"smplr/wavfile"
@@ -29,7 +30,7 @@ func renderBrailleWaveform(peaks []float64, width int) string {
 	totalLevels := brailleHeight * 4 // 4 dots per column per character
 
 	// Each braille char shows 2 columns of waveform
-	peaksPerColumn := len(peaks) / (width * 2)
+	peaksPerColumn := float64(len(peaks)) / float64((width * 2))
 	if peaksPerColumn < 1 {
 		peaksPerColumn = 1
 	}
@@ -47,16 +48,18 @@ func renderBrailleWaveform(peaks []float64, width int) string {
 		// Process 2 columns (left and right dots)
 		for subCol := 0; subCol < 2; subCol++ {
 			peakCol := brailleCol*2 + subCol
-			start := peakCol * peaksPerColumn
+			start := float64(peakCol) * peaksPerColumn
 			end := start + peaksPerColumn
-			if end > len(peaks) {
-				end = len(peaks)
+			if end > float64(len(peaks)) {
+				end = float64(len(peaks))
 			}
 
-			if start < len(peaks) {
+			if start < float64(len(peaks)) {
 				// Find max value in this range of peaks
 				maxAbs := 0.0
-				for i := start; i < end; i++ {
+				loopStart := int(math.Round(start))
+				loopEnd := int(math.Round(end))
+				for i := loopStart; i < loopEnd; i++ {
 					if peaks[i] > maxAbs {
 						maxAbs = peaks[i]
 					}
