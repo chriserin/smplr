@@ -10,11 +10,38 @@ import (
 	"smplr/wavfile"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/spf13/cobra"
 )
 
 const VERSION = "v0.1.0-alpha.2"
 
+var rootCmd = &cobra.Command{
+	Use:   "smplr",
+	Short: "A MIDI-controlled audio sampler with a terminal UI",
+	Long:  `smplr is a terminal-based audio sampler that loads WAV files and triggers them via MIDI input with pitch shifting, trimming, and waveform display capabilities.`,
+	Run:   runSampler,
+}
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print the version number of smplr",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println("smplr", VERSION)
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(versionCmd)
+}
+
 func main() {
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func runSampler(cmd *cobra.Command, args []string) {
 	// Create channel for metadata loading
 	metadataChan := make(chan wavfile.MetadataLoadedMsg)
 	files := wavfile.LoadFiles(metadataChan)
