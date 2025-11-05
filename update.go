@@ -511,6 +511,17 @@ func (m model) handleNavigationInput(mapping mappings.Mapping) (tea.Model, tea.C
 					m.SetCurrentError(fmt.Sprintf("Warning: failed to remove pitched versions: %v", err))
 				}
 
+				// Destroy the old player and create a new one
+				if err := m.audio.DestroyPlayer((*m.files)[m.cursor].PlayerId); err != nil {
+					m.SetCurrentError(fmt.Sprintf("Warning: failed to destroy player: %v", err))
+				}
+				newPlayerID, err := m.audio.CreatePlayer((*m.files)[m.cursor].Name)
+				if err != nil {
+					m.SetCurrentError(fmt.Sprintf("Failed to create new player: %v", err))
+				} else {
+					(*m.files)[m.cursor].PlayerId = newPlayerID
+				}
+
 				// Reload metadata after trimming
 				metadata, err := wavfile.ReadMetadata((*m.files)[m.cursor].Name)
 				if err == nil {

@@ -32,17 +32,17 @@ type Metadata struct {
 
 // WavFile represents a WAV file with its MIDI mapping and playback state
 type WavFile struct {
-	PlayingCount     int // Reference count of active playbacks
-	Loading          bool
-	MidiChannel      int
-	MidiNote         int
-	Pitch            int    // Pitch shift in semitones (-12 to 12)
-	PitchedFileName  string // Path to offline-rendered pitched file, empty if pitch is 0
-	StartFrame       int
-	EndFrame         int
-	PlayerId         int
-	Metadata         *Metadata
-	Name             string
+	PlayingCount    int // Reference count of active playbacks
+	Loading         bool
+	MidiChannel     int
+	MidiNote        int
+	Pitch           int    // Pitch shift in semitones (-12 to 12)
+	PitchedFileName string // Path to offline-rendered pitched file, empty if pitch is 0
+	StartFrame      int
+	EndFrame        int
+	PlayerId        int
+	Metadata        *Metadata
+	Name            string
 }
 
 type wavHeader struct {
