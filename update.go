@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"os"
 	"time"
 
 	"smplr/audio"
@@ -27,11 +29,22 @@ type model struct {
 	markerStepSize    int    // number of frames to move marker with h/l
 	activeMarker      string // "start" or "end"
 	currentError      string // error message to display
+	logger            *log.Logger
 }
 
 func initialModel(files *[]wavfile.WavFile, audio audio.Audio) model {
 	vp := viewport.New(80, 10)
 	vp.YPosition = 0
+
+	// Create error log file
+	logFile, err := os.OpenFile("error.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		// If we can't open the log file, create a logger that writes to stderr
+		log.Printf("Failed to open error.log: %v", err)
+		logFile = os.Stderr
+	}
+
+	logger := log.New(logFile, "ERROR: ", log.LstdFlags)
 
 	return model{
 		files:             files,
@@ -47,6 +60,7 @@ func initialModel(files *[]wavfile.WavFile, audio audio.Audio) model {
 		windowWidth:       80,
 		markerStepSize:    1,
 		activeMarker:      "start",
+		logger:            logger,
 	}
 }
 
@@ -124,6 +138,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case wavfile.MetadataLoadedMsg:
+		if msg.Err != nil {
+			m.SetCurrentError(fmt.Sprintf("Error loading metadata for %s: %v", msg.Filename, msg.Err))
+			return m, nil
+		}
 		// Find the WavFile with matching name and attach metadata
 		for i := range *m.files {
 			if (*m.files)[i].Name == msg.Filename {
@@ -479,7 +497,7 @@ func (m model) handleNavigationInput(mapping mappings.Mapping) (tea.Model, tea.C
 	case mappings.TrimFile:
 		if !m.recording && len(*m.files) > 0 && m.cursor >= 0 && m.cursor < len(*m.files) {
 			if (*m.files)[m.cursor].Pitch != 0 {
-				m.currentError = "Cannot trim file with non-zero pitch. Reset pitch to 0 first."
+				m.SetCurrentError("Cannot trim file with non-zero pitch. Reset pitch to 0 first.")
 				return m, nil
 			}
 			err := m.audio.TrimFile(
@@ -490,7 +508,7 @@ func (m model) handleNavigationInput(mapping mappings.Mapping) (tea.Model, tea.C
 			if err == nil {
 				// Remove all pitched versions of this file
 				if err := wavfile.RemoveAllPitchedVersions((*m.files)[m.cursor].Name); err != nil {
-					m.currentError = fmt.Sprintf("Warning: failed to remove pitched versions: %v", err)
+					m.SetCurrentError(fmt.Sprintf("Warning: failed to remove pitched versions: %v", err))
 				}
 
 				// Reload metadata after trimming
@@ -502,9 +520,20 @@ func (m model) handleNavigationInput(mapping mappings.Mapping) (tea.Model, tea.C
 					(*m.files)[m.cursor].EndFrame = metadata.NumFrames - 1
 					// Update marker step size for the new file length
 					m.updateMarkerStepSize()
+				} else {
+					m.SetCurrentError(fmt.Sprintf("Warning: failed to reload metadata: %v", err))
 				}
 			}
 		}
 	}
 	return m, nil
+}
+
+func (m *model) SetCurrentError(errMsg string) {
+	// Set current error message
+	m.currentError = errMsg
+	// Log the error to error.log
+	if m.logger != nil {
+		m.logger.Println(errMsg)
+	}
 }
