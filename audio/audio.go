@@ -23,6 +23,7 @@ extern int SwiftAudio_init(void);
 extern int SwiftAudio_start(void);
 extern int SwiftAudio_createPlayer(const char* filename);
 extern int SwiftAudio_destroyPlayer(int playerID);
+extern int SwiftAudio_stopPlayer(int playerID);
 extern int SwiftAudio_record(const char* filename);
 extern int SwiftAudio_stopRecording(void);
 extern int SwiftAudio_playFile(int playerID, const char* filename, float cents);
@@ -65,6 +66,7 @@ type Audio interface {
 	Start() error
 	CreatePlayer(filename string) (int, error)
 	DestroyPlayer(playerID int) error
+	StopPlayer(playerID int) error
 	Record(filename string) error
 	StopRecording() error
 	PlayFile(playerID int, filename string, cents float32) error
@@ -108,6 +110,12 @@ func (a *StubAudio) CreatePlayer(filename string) (int, error) {
 // DestroyPlayer destroys the audio player with the given ID
 func (a *StubAudio) DestroyPlayer(playerID int) error {
 	// Stub implementation - nothing to destroy
+	return nil
+}
+
+// StopPlayer stops playback for the given player ID
+func (a *StubAudio) StopPlayer(playerID int) error {
+	// Stub implementation - nothing to stop
 	return nil
 }
 
@@ -368,6 +376,15 @@ func (a *SwiftAudio) DestroyPlayer(playerID int) error {
 	result := C.SwiftAudio_destroyPlayer(C.int(playerID))
 	if result != 0 {
 		return fmt.Errorf("failed to destroy audio player")
+	}
+	return nil
+}
+
+// StopPlayer stops playback for the given player ID
+func (a *SwiftAudio) StopPlayer(playerID int) error {
+	result := C.SwiftAudio_stopPlayer(C.int(playerID))
+	if result != 0 {
+		return fmt.Errorf("failed to stop audio player")
 	}
 	return nil
 }

@@ -53,6 +53,10 @@ func (p *Player) playerLoop() {
 				var channel, note, velocity uint8
 				msg.GetNoteOn(&channel, &note, &velocity)
 				p.playNote(channel, note)
+			} else if msg.Type().Is(midi.NoteOffMsg) {
+				var channel, note, velocity uint8
+				msg.GetNoteOff(&channel, &note, &velocity)
+				p.stopNote(channel, note)
 			}
 		}
 	}
@@ -63,9 +67,15 @@ func (p *Player) playNote(channel uint8, note uint8) {
 	midiChannel := int(channel) + 1
 	midiNote := int(note)
 
-	for _, file := range *p.files {
+	for i := range *p.files {
+		file := &(*p.files)[i]
 		if file.MidiChannel == midiChannel && file.MidiNote == midiNote {
 			if file.Metadata != nil {
+				// Stop and restart if already playing
+				if file.PlayingCount > 0 {
+					p.audio.StopPlayer(file.PlayerId)
+					file.PlayingCount = 0
+				}
 				// Use pitched file if it exists, otherwise use original
 				filename := file.Name
 				if file.PitchedFileName != "" {
@@ -77,6 +87,23 @@ func (p *Player) playNote(channel uint8, note uint8) {
 					panic("Error playing region: " + err.Error())
 				}
 				p.sendFn(wavfile.PlaybackStartedMsg{Filename: file.Name})
+			}
+			return
+		}
+	}
+}
+
+// stopNote finds and stops the WAV file matching the MIDI channel and note
+func (p *Player) stopNote(channel uint8, note uint8) {
+	midiChannel := int(channel) + 1
+	midiNote := int(note)
+
+	for i := range *p.files {
+		file := &(*p.files)[i]
+		if file.MidiChannel == midiChannel && file.MidiNote == midiNote {
+			if file.PlayingCount > 0 {
+				p.audio.StopPlayer(file.PlayerId)
+				file.PlayingCount = 0
 			}
 			return
 		}

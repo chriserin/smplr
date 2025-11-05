@@ -74,6 +74,15 @@ class AudioEngineManager {
         playerBuffers.removeValue(forKey: playerID)
     }
 
+    func stopPlayer(_ playerID: Int32) {
+        guard let playerNode = players[playerID] else {
+            print("Warning: Player ID \(playerID) not found")
+            return
+        }
+
+        playerNode.stop()
+    }
+
     func playFile(_ playerID: Int32, _ fileURL: URL, cents: Float) throws {
         guard let playerNode = players[playerID] else {
             print("Error: Player ID \(playerID) not found")
@@ -395,6 +404,17 @@ public func SwiftAudio_destroyPlayer(_ playerID: Int32) -> Int32 {
     }
 
     manager.destroyPlayer(playerID)
+    return 0
+}
+
+@_cdecl("SwiftAudio_stopPlayer")
+public func SwiftAudio_stopPlayer(_ playerID: Int32) -> Int32 {
+    guard let manager = gAudioEngineManager else {
+        print("Error: Audio engine not initialized.")
+        return 1
+    }
+
+    manager.stopPlayer(playerID)
     return 0
 }
 

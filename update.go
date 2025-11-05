@@ -424,6 +424,15 @@ func (m model) handleNavigationInput(mapping mappings.Mapping) (tea.Model, tea.C
 
 	case mappings.PlayFile:
 		if !m.recording && len(*m.files) > 0 && m.cursor >= 0 && m.cursor < len(*m.files) {
+			// Stop if currently playing
+			if (*m.files)[m.cursor].PlayingCount > 0 {
+				err := m.audio.StopPlayer((*m.files)[m.cursor].PlayerId)
+				if err != nil {
+					panic("Error stopping file from update")
+				}
+				(*m.files)[m.cursor].PlayingCount = 0
+				return m, nil
+			}
 			// Use pitched file if it exists, otherwise use original
 			filename := (*m.files)[m.cursor].Name
 			if (*m.files)[m.cursor].PitchedFileName != "" {
@@ -439,6 +448,15 @@ func (m model) handleNavigationInput(mapping mappings.Mapping) (tea.Model, tea.C
 
 	case mappings.PlayRegion:
 		if !m.recording && len(*m.files) > 0 && m.cursor >= 0 && m.cursor < len(*m.files) {
+			// Stop if currently playing
+			if (*m.files)[m.cursor].PlayingCount > 0 {
+				err := m.audio.StopPlayer((*m.files)[m.cursor].PlayerId)
+				if err != nil {
+					panic("Error stopping file from update")
+				}
+				(*m.files)[m.cursor].PlayingCount = 0
+				return m, nil
+			}
 			// Use pitched file if it exists, otherwise use original
 			filename := (*m.files)[m.cursor].Name
 			if (*m.files)[m.cursor].PitchedFileName != "" {
