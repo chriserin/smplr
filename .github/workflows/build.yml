@@ -13,10 +13,14 @@ env:
 jobs:
   # build macOS (smplr requires macOS for CoreAudio/AVFoundation)
   build-macos:
-    runs-on: macos-latest
     strategy:
       matrix:
-        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            runner: macos-13  # Intel runner for x86_64
+          - arch: arm64
+            runner: macos-latest  # ARM runner for arm64
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,31 +32,30 @@ jobs:
 
       - name: Install dependencies
         run: |
-          if [ "${{ matrix.arch }}" = "amd64" ]; then
-            # Install x86_64 versions
-            arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
-            arch -x86_64 /usr/local/bin/brew install rubberband libsamplerate
-          else
-            # Install arm64 versions
-            brew install rubberband libsamplerate
-          fi
+          # Install rubberband and libsamplerate (native architecture)
+          brew install rubberband libsamplerate
 
       - name: Build Swift audio bridge
         run: |
           # Set architecture-specific compiler flags and library paths
           if [ "${{ matrix.arch }}" = "amd64" ]; then
             export ARCH_FLAGS="-target x86_64-apple-macos13"
-            export RUBBERBAND_PREFIX="/usr/local/opt/rubberband"
+            export HOMEBREW_PREFIX="/usr/local"
           else
             export ARCH_FLAGS="-target arm64-apple-macos13"
-            export RUBBERBAND_PREFIX="/opt/homebrew/opt/rubberband"
+            export HOMEBREW_PREFIX="/opt/homebrew"
           fi
 
           cd audio
           swiftc -c -parse-as-library AudioBridge.swift -o AudioBridge.o \
             -import-objc-header rubberband-bridge.h \
-            -I${RUBBERBAND_PREFIX}/include \
+            -I${HOMEBREW_PREFIX}/opt/rubberband/include \
             ${ARCH_FLAGS}
+
+          # Verify architecture
+          echo "AudioBridge.o architecture:"
+          file AudioBridge.o
+          lipo -archs AudioBridge.o
           cd ..
 
       - name: Build macOS binary
@@ -65,13 +68,11 @@ jobs:
           go build -ldflags "-s -w" -o smplr-darwin-${{ matrix.arch }}
 
           # Verify the binary architecture
+          echo "Binary architecture:"
           file smplr-darwin-${{ matrix.arch }}
-          lipo -info smplr-darwin-${{ matrix.arch }}
-
-      - name: Verify binary
-        run: |
-          file smplr-darwin-${{ matrix.arch }}
-          otool -L smplr-darwin-${{ matrix.arch }} || true
+          lipo -archs smplr-darwin-${{ matrix.arch }}
+          echo "Binary dependencies:"
+          otool -L smplr-darwin-${{ matrix.arch }} | grep -E "rubberband|samplerate" || echo "✓ Rubberband and libsamplerate statically linked"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
