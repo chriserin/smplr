@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [v0.1.0-alpha.7](https://github.com/chriserin/smplr/compare/v0.1.0-alpha.6...v0.1.0-alpha.7) (2025-11-05)
+
+### Features
+
+* Add rendering case for 24bit wavs [01f97f2](https://github.com/chriserin/smplr/commit/01f97f2) 
+### Fixes
+
+No bug fixes.
+
+
 ## [v0.1.0-alpha.6](https://github.com/chriserin/smplr/compare/v0.1.0-alpha.5...v0.1.0-alpha.6) (2025-11-05)
 
 ### Features
