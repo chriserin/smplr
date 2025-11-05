@@ -30,8 +30,16 @@ var versionCmd = &cobra.Command{
 	},
 }
 
+var infoCmd = &cobra.Command{
+	Use:   "info <wav-file>",
+	Short: "Display metadata information for a WAV file",
+	Args:  cobra.ExactArgs(1),
+	Run:   runInfo,
+}
+
 func init() {
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(infoCmd)
 }
 
 func main() {
@@ -39,6 +47,24 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func runInfo(cmd *cobra.Command, args []string) {
+	filename := args[0]
+
+	// Read metadata
+	metadata, err := wavfile.ReadMetadata(filename)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading metadata: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Output metadata
+	fmt.Printf("File: %s\n", filename)
+	fmt.Printf("Sample Rate: %d Hz\n", metadata.SampleRate)
+	fmt.Printf("Frames: %d\n", metadata.NumFrames)
+	fmt.Printf("Duration: %.2f seconds\n", metadata.Duration)
+	fmt.Printf("Waveform Segments: %d\n", len(metadata.WaveformData.Peaks))
 }
 
 func runSampler(cmd *cobra.Command, args []string) {
