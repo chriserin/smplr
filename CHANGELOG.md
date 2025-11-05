@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [v0.1.0-alpha.6](https://github.com/chriserin/smplr/compare/v0.1.0-alpha.5...v0.1.0-alpha.6) (2025-11-05)
+
+### Features
+
+* Add cmd info for wavfile metadata [2caf2ef](https://github.com/chriserin/smplr/commit/2caf2ef) 
+### Fixes
+
+No bug fixes.
+
+
 ## [v0.1.0-alpha.5](https://github.com/chriserin/smplr/compare/v0.1.0-alpha.4...v0.1.0-alpha.5) (2025-11-05)
 
 ### Features
