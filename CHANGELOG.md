@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [v0.1.0-alpha.5](https://github.com/chriserin/smplr/compare/v0.1.0-alpha.4...v0.1.0-alpha.5) (2025-11-05)
+
+### Features
+
+* Stop when playing on <space> or a [4fd1bb4](https://github.com/chriserin/smplr/commit/4fd1bb4) 
+### Fixes
+
+No bug fixes.
+
+
 ## [v0.1.0-alpha.4](https://github.com/chriserin/smplr/compare/v0.1.0-alpha.3...v0.1.0-alpha.4) (2025-11-04)
 
 ### Features

@@ -13,7 +13,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const VERSION = "v0.1.0-alpha.4"
+const VERSION = "v0.1.0-alpha.5"
 
 var rootCmd = &cobra.Command{
 	Use:   "smplr",
