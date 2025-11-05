@@ -323,6 +323,28 @@ func ReadMetadata(filename string) (*Metadata, error) {
 				file.Seek(int64(header.NumChannels-1), io.SeekCurrent)
 			}
 		}
+	case 24:
+		for i := range numSamples {
+			var bytes [3]byte
+			if err := binary.Read(file, binary.LittleEndian, &bytes); err != nil {
+				if err == io.EOF {
+					break
+				}
+				return nil, err
+			}
+			// Convert 24-bit little-endian to int32
+			sample := int32(bytes[0]) | int32(bytes[1])<<8 | int32(bytes[2])<<16
+			// Sign extend from 24-bit to 32-bit
+			if sample&0x800000 != 0 {
+				sample |= ^0xFFFFFF
+			}
+			samples[i] = float64(sample) / 8388608.0
+
+			// Skip other channels if stereo
+			if header.NumChannels > 1 {
+				file.Seek(int64((header.NumChannels-1)*3), io.SeekCurrent)
+			}
+		}
 	default:
 		return nil, fmt.Errorf("unsupported bit depth: %d", header.BitsPerSample)
 	}
