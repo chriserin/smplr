@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"smplr/audio"
@@ -13,6 +15,19 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+// interruptMsg is sent when the program receives an interrupt signal
+type interruptMsg struct{}
+
+// waitForInterrupt returns a command that waits for interrupt signals
+func waitForInterrupt() tea.Cmd {
+	return func() tea.Msg {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+		<-sigChan
+		return interruptMsg{}
+	}
+}
 
 type model struct {
 	files             *[]wavfile.WavFile
@@ -120,6 +135,17 @@ func (m *model) handlePitchChange(fileIndex int, newPitch int) error {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case interruptMsg:
+		// Clean up recording if active
+		if m.recording {
+			m.audio.StopRecording()
+			// Remove the partial recording file
+			if m.recordingFilename != "" {
+				os.Remove(m.recordingFilename)
+			}
+		}
+		return m, tea.Quit
+
 	case wavfile.PlaybackStartedMsg:
 		for i := range *m.files {
 			if (*m.files)[i].Name == msg.Filename {
@@ -224,7 +250,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) Init() tea.Cmd {
-	return nil
+	return waitForInterrupt()
 }
 
 func (m *model) scrollToSelection() {
@@ -332,6 +358,14 @@ func (m model) handleNavigationInput(mapping mappings.Mapping) (tea.Model, tea.C
 
 	switch mapping.Command {
 	case mappings.Quit:
+		// Clean up recording if active
+		if m.recording {
+			m.audio.StopRecording()
+			// Remove the partial recording file
+			if m.recordingFilename != "" {
+				os.Remove(m.recordingFilename)
+			}
+		}
 		return m, tea.Quit
 
 	case mappings.CursorUp:
