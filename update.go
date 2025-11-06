@@ -22,6 +22,7 @@ type model struct {
 	editValue         string
 	recording         bool
 	recordingFilename string
+	decibelLevel      float32 // current recording level in dB
 	audio             audio.Audio
 	viewport          viewport.Model
 	ready             bool
@@ -136,6 +137,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				break
 			}
 		}
+		return m, nil
+	case DecibelLevelMsg:
+		m.decibelLevel = msg.Level
 		return m, nil
 	case wavfile.MetadataLoadedMsg:
 		if msg.Err != nil {

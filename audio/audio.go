@@ -5,17 +5,28 @@ package audio
 #cgo darwin,amd64 LDFLAGS: ${SRCDIR}/AudioBridge.o /usr/local/opt/rubberband/lib/librubberband.a /usr/local/opt/libsamplerate/lib/libsamplerate.a -framework Accelerate
 #include <stdlib.h>
 
-// Forward declare the Go callback
+// Forward declare the Go callbacks
 extern void goPlaybackFinished(int playerID);
+extern void goDecibelLevel(float db);
 
 // C wrapper function that will be passed to Swift
 static void cPlaybackFinishedCallback(int playerID) {
     goPlaybackFinished(playerID);
 }
 
+// C wrapper function for decibel level callback
+static void cDecibelLevelCallback(float db) {
+    goDecibelLevel(db);
+}
+
 // Helper function to get the function pointer
 static void* getCPlaybackFinishedCallback() {
     return (void*)cPlaybackFinishedCallback;
+}
+
+// Helper function to get the decibel callback function pointer
+static void* getCDecibelLevelCallback() {
+    return (void*)cDecibelLevelCallback;
 }
 
 // Declare Swift functions
@@ -31,6 +42,7 @@ extern int SwiftAudio_playRegion(int playerID, const char* filename, int startFr
 extern int SwiftAudio_trimFile(const char* filename, int startFrame, int endFrame);
 extern int SwiftAudio_renderPitchedFile(const char* sourceFilename, const char* targetFilename, float cents);
 extern void SwiftAudio_setCompletionCallback(void (*callback)(int));
+extern void SwiftAudio_setDecibelCallback(void (*callback)(float));
 */
 import "C"
 import (
@@ -41,13 +53,21 @@ import (
 	"unsafe"
 )
 
-// Global channel for playback completion notifications
+// Global channels for notifications
 var playbackCompletionChan chan int
+var decibelLevelChan chan float32
 
 //export goPlaybackFinished
 func goPlaybackFinished(playerID C.int) {
 	if playbackCompletionChan != nil {
 		playbackCompletionChan <- int(playerID)
+	}
+}
+
+//export goDecibelLevel
+func goDecibelLevel(db C.float) {
+	if decibelLevelChan != nil {
+		decibelLevelChan <- float32(db)
 	}
 }
 
@@ -57,6 +77,14 @@ func SetPlaybackCompletionChannel(ch chan int) {
 	// Register the callback with Swift using the C wrapper
 	callbackPtr := C.getCPlaybackFinishedCallback()
 	C.SwiftAudio_setCompletionCallback((*[0]byte)(callbackPtr))
+}
+
+// SetDecibelLevelChannel sets the channel for decibel level notifications
+func SetDecibelLevelChannel(ch chan float32) {
+	decibelLevelChan = ch
+	// Register the callback with Swift using the C wrapper
+	callbackPtr := C.getCDecibelLevelCallback()
+	C.SwiftAudio_setDecibelCallback((*[0]byte)(callbackPtr))
 }
 
 // Audio defines the interface for audio recording and playback operations

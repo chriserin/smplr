@@ -6,6 +6,7 @@ import ScreenCaptureKit
 private var gSystemAudioRecorder: SystemAudioRecorder?
 private var gAudioEngineManager: AudioEngineManager?
 private var gCompletionCallback: (@convention(c) (Int32) -> Void)?
+private var gDecibelCallback: (@convention(c) (Float) -> Void)?
 
 // Audio Engine Manager class
 class AudioEngineManager {
@@ -250,6 +251,41 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
         isRecording = false
     }
 
+    // Calculate decibel level from audio buffer
+    private func calculateDecibels(from sampleBuffer: CMSampleBuffer) -> Float {
+        guard let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else {
+            return -160.0
+        }
+
+        var length: Int = 0
+        var dataPointer: UnsafeMutablePointer<Int8>?
+
+        guard CMBlockBufferGetDataPointer(blockBuffer, atOffset: 0, lengthAtOffsetOut: nil,
+                                         totalLengthOut: &length, dataPointerOut: &dataPointer) == noErr,
+              let data = dataPointer else {
+            return -160.0
+        }
+
+        // Calculate samples (Float format from ScreenCaptureKit)
+        let bytesPerSample = MemoryLayout<Float>.size
+        let totalSamples = length / bytesPerSample
+
+        // Process as Float samples (interleaved)
+        let floatData = data.withMemoryRebound(to: Float.self, capacity: totalSamples) { $0 }
+
+        // Calculate RMS across all channels
+        var sum: Float = 0.0
+        for i in 0..<totalSamples {
+            let sample = floatData[i]
+            sum += sample * sample
+        }
+
+        let rms = sqrt(sum / Float(totalSamples))
+        let db = 20.0 * log10(max(rms, 0.00001))
+
+        return db
+    }
+
     // SCStreamOutput protocol method
     func stream(
         _ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
@@ -259,6 +295,12 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
 
         let numSamples = CMSampleBufferGetNumSamples(sampleBuffer)
         guard numSamples > 0 else { return }
+
+        // Calculate and send decibel level
+        if let decibelCallback = gDecibelCallback {
+            let db = calculateDecibels(from: sampleBuffer)
+            decibelCallback(db)
+        }
 
         // Initialize asset writer on first buffer
         if assetWriter == nil {
@@ -370,6 +412,11 @@ public func SwiftAudio_start() -> Int32 {
 @_cdecl("SwiftAudio_setCompletionCallback")
 public func SwiftAudio_setCompletionCallback(_ callback: @escaping @convention(c) (Int32) -> Void) {
     gCompletionCallback = callback
+}
+
+@_cdecl("SwiftAudio_setDecibelCallback")
+public func SwiftAudio_setDecibelCallback(_ callback: @escaping @convention(c) (Float) -> Void) {
+    gDecibelCallback = callback
 }
 
 @_cdecl("SwiftAudio_createPlayer")

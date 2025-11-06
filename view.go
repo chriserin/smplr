@@ -93,6 +93,7 @@ func (m model) View() string {
 			Foreground(lipgloss.Color("196")).
 			Bold(true)
 		b.WriteString(recordingStyle.Render("● RECORDING") + "\n")
+		b.WriteString(renderLevelMeter(m.decibelLevel, 50) + "\n")
 	}
 
 	// Display error message if present
@@ -118,4 +119,54 @@ func (m model) View() string {
 	}
 
 	return b.String()
+}
+
+// renderLevelMeter renders a horizontal level meter for audio decibel levels
+func renderLevelMeter(db float32, width int) string {
+	// Decibel range: -60 dB (quiet) to 0 dB (max)
+	// Clamp the value
+	if db < -60 {
+		db = -60
+	}
+	if db > 0 {
+		db = 0
+	}
+
+	// Convert dB to percentage (0-100)
+	percentage := (db + 60) / 60 * 100
+
+	// Calculate how many bars to fill
+	filledWidth := int(float32(width) * percentage / 100)
+	if filledWidth < 0 {
+		filledWidth = 0
+	}
+	if filledWidth > width {
+		filledWidth = width
+	}
+
+	// Create the meter with color gradient
+	var meter strings.Builder
+	meter.WriteString("[")
+
+	for i := 0; i < width; i++ {
+		if i < filledWidth {
+			// Color coding: green (0-70%), yellow (70-85%), red (85-100%)
+			percentAtBar := float32(i) / float32(width) * 100
+			var barStyle lipgloss.Style
+			if percentAtBar < 70 {
+				barStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("46")) // Green
+			} else if percentAtBar < 85 {
+				barStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("226")) // Yellow
+			} else {
+				barStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")) // Red
+			}
+			meter.WriteString(barStyle.Render("█"))
+		} else {
+			meter.WriteString(" ")
+		}
+	}
+
+	meter.WriteString(fmt.Sprintf("] %.1f dB", db))
+
+	return meter.String()
 }

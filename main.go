@@ -15,6 +15,11 @@ import (
 
 const VERSION = "v0.1.0-alpha.7"
 
+// DecibelLevelMsg is sent when recording decibel levels are updated
+type DecibelLevelMsg struct {
+	Level float32
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "smplr",
 	Short: "A MIDI-controlled audio sampler with a terminal UI",
@@ -81,6 +86,10 @@ func runSampler(cmd *cobra.Command, args []string) {
 	playbackCompletionChan := make(chan int)
 	audio.SetPlaybackCompletionChannel(playbackCompletionChan)
 
+	// Create and register decibel level channel
+	decibelLevelChan := make(chan float32)
+	audio.SetDecibelLevelChannel(decibelLevelChan)
+
 	smplrPlayer := player.NewPlayer(&files, audioApi, p.Send)
 	smplrPlayer.Start()
 	stopFunc, err := smplrmidi.Start(smplrPlayer.MsgChan)
@@ -110,6 +119,13 @@ func runSampler(cmd *cobra.Command, args []string) {
 			if filename != "" {
 				p.Send(wavfile.PlaybackFinishedMsg{Filename: filename})
 			}
+		}
+	}()
+
+	// Start goroutine to forward decibel level messages to the program
+	go func() {
+		for db := range decibelLevelChan {
+			p.Send(DecibelLevelMsg{Level: db})
 		}
 	}()
 
