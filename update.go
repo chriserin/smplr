@@ -85,6 +85,11 @@ func initialModel(files *[]wavfile.WavFile, audio audio.Audio) model {
 func (m *model) handlePitchChange(fileIndex int, newPitch int) error {
 	file := &(*m.files)[fileIndex]
 
+	// Check if original file exists
+	if _, err := os.Stat(file.Name); os.IsNotExist(err) {
+		return fmt.Errorf("file does not exist: %s", file.Name)
+	}
+
 	// Generate pitched filename
 	pitchedFilename := wavfile.GeneratePitchedFilename(file.Name, newPitch)
 
@@ -296,6 +301,46 @@ func (m *model) scrollToSelection() {
 
 	// Update marker step size to move by one character
 	m.updateMarkerStepSize()
+}
+
+// adjustCursorToValidFile adjusts the cursor to point to a valid non-corrupted file
+func (m *model) adjustCursorToValidFile() {
+	if len(*m.files) == 0 {
+		m.cursor = -1
+		return
+	}
+
+	// Adjust cursor position to be within bounds
+	if m.cursor >= len(*m.files) {
+		m.cursor = len(*m.files) - 1
+	}
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+
+	// If current file is corrupted, find the next non-corrupted file
+	if m.cursor < len(*m.files) && (*m.files)[m.cursor].Corrupted {
+		// Try to find a non-corrupted file starting from current position
+		found := false
+		for i := m.cursor; i < len(*m.files); i++ {
+			if !(*m.files)[i].Corrupted {
+				m.cursor = i
+				found = true
+				break
+			}
+		}
+		// If not found forward, search backward
+		if !found {
+			for i := m.cursor - 1; i >= 0; i-- {
+				if !(*m.files)[i].Corrupted {
+					m.cursor = i
+					found = true
+					break
+				}
+			}
+		}
+		// If no non-corrupted file found, leave cursor at current position
+	}
 }
 
 func (m *model) updateMarkerStepSize() {
@@ -628,6 +673,19 @@ func (m model) handleNavigationInput(mapping mappings.Mapping) (tea.Model, tea.C
 		if !m.recording && len(*m.files) > 0 && m.cursor >= 0 && m.cursor < len(*m.files) {
 			if (*m.files)[m.cursor].Pitch != 0 {
 				m.SetCurrentError("Cannot trim file with non-zero pitch. Reset pitch to 0 first.")
+				return m, nil
+			}
+			// Check if file exists before trimming
+			if _, err := os.Stat((*m.files)[m.cursor].Name); os.IsNotExist(err) {
+				m.SetCurrentError(fmt.Sprintf("File does not exist: %s", (*m.files)[m.cursor].Name))
+
+				// Remove file from the list
+				fileToRemove := m.cursor
+				*m.files = append((*m.files)[:fileToRemove], (*m.files)[fileToRemove+1:]...)
+
+				// Adjust cursor to valid non-corrupted file
+				m.adjustCursorToValidFile()
+
 				return m, nil
 			}
 			err := m.audio.TrimFile(
