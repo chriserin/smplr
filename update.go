@@ -33,7 +33,7 @@ type model struct {
 	files             *[]wavfile.WavFile
 	cursor            int
 	editing           bool
-	editField         string // "channel" or "note"
+	editField         string // "channel", "note", "pitch", or "filename"
 	editValue         string
 	recording         bool
 	recordingFilename string
@@ -46,6 +46,7 @@ type model struct {
 	activeMarker      string // "start" or "end"
 	currentError      string // error message to display
 	logger            *log.Logger
+	renamingRecording bool   // true when prompting for filename after recording
 }
 
 func initialModel(files *[]wavfile.WavFile, audio audio.Audio) model {
@@ -339,13 +340,64 @@ func (m model) handleEditingInput(mapping mappings.Mapping) (tea.Model, tea.Cmd)
 			} else if m.editField == "note" && value >= 0 && value <= 127 {
 				(*m.files)[m.cursor].MidiNote = value
 			} else if m.editField == "pitch" && value >= -12 && value <= 12 {
-				(*m.files)[m.cursor].Pitch = value
-
 				// Handle offline rendering for pitch change
 				err := m.handlePitchChange(m.cursor, value)
 				if err != nil {
-					fmt.Printf("Error handling pitch change: %v\n", err)
+					m.SetCurrentError(fmt.Sprintf("Failed to change pitch: %v", err))
+
+					// If file doesn't exist, remove it from the list
+					if _, statErr := os.Stat((*m.files)[m.cursor].Name); os.IsNotExist(statErr) {
+						fileToRemove := m.cursor
+						*m.files = append((*m.files)[:fileToRemove], (*m.files)[fileToRemove+1:]...)
+
+						// Adjust cursor to valid non-corrupted file
+						m.adjustCursorToValidFile()
+					}
+				} else {
+					// Only set pitch if successful
+					(*m.files)[m.cursor].Pitch = value
 				}
+			} else if m.editField == "filename" && m.renamingRecording {
+				// Handle recording filename rename
+				newFilename := m.editValue + ".wav"
+
+				// Rename the file
+				err := os.Rename(m.recordingFilename, newFilename)
+				if err != nil {
+					m.SetCurrentError(fmt.Sprintf("Failed to rename file: %v", err))
+				} else {
+					// Find the largest midi note and add 1
+					maxNote := wavfile.FindMaxMidiNote((*m.files))
+					// Load metadata for the new recording
+					metadata, err := wavfile.ReadMetadata(newFilename)
+					if err != nil {
+						metadata = nil
+					}
+					endFrame := 0
+					if metadata != nil {
+						endFrame = metadata.NumFrames - 1
+					}
+					*m.files = append(*m.files, wavfile.WavFile{
+						Name:        newFilename,
+						MidiChannel: 1,
+						MidiNote:    maxNote + 1,
+						StartFrame:  0,
+						EndFrame:    endFrame,
+						Metadata:    metadata,
+						Loading:     false,
+					})
+					playerId, err := m.audio.CreatePlayer(newFilename)
+					if err != nil {
+						panic(err)
+					}
+					(*m.files)[len(*m.files)-1].PlayerId = playerId
+					// Select the newly added file
+					m.cursor = len(*m.files) - 1
+					m.scrollToSelection() // This will call updateMarkerStepSize()
+				}
+
+				m.recordingFilename = ""
+				m.renamingRecording = false
 			}
 		}
 		m.editing = false
@@ -354,6 +406,37 @@ func (m model) handleEditingInput(mapping mappings.Mapping) (tea.Model, tea.Cmd)
 
 	case mappings.Escape:
 		// Cancel editing
+		if m.editField == "filename" && m.renamingRecording {
+			// Keep the timestamp-based filename
+			maxNote := wavfile.FindMaxMidiNote((*m.files))
+			metadata, err := wavfile.ReadMetadata(m.recordingFilename)
+			if err != nil {
+				metadata = nil
+			}
+			endFrame := 0
+			if metadata != nil {
+				endFrame = metadata.NumFrames - 1
+			}
+			*m.files = append(*m.files, wavfile.WavFile{
+				Name:        m.recordingFilename,
+				MidiChannel: 1,
+				MidiNote:    maxNote + 1,
+				StartFrame:  0,
+				EndFrame:    endFrame,
+				Metadata:    metadata,
+				Loading:     false,
+			})
+			playerId, err := m.audio.CreatePlayer(m.recordingFilename)
+			if err != nil {
+				panic(err)
+			}
+			(*m.files)[len(*m.files)-1].PlayerId = playerId
+			m.cursor = len(*m.files) - 1
+			m.scrollToSelection()
+
+			m.recordingFilename = ""
+			m.renamingRecording = false
+		}
 		m.editing = false
 		m.editValue = ""
 		m.editField = ""
@@ -364,6 +447,9 @@ func (m model) handleEditingInput(mapping mappings.Mapping) (tea.Model, tea.Cmd)
 		}
 
 	case mappings.NumberInput:
+		m.editValue += mapping.LastValue
+
+	case mappings.TextInput:
 		m.editValue += mapping.LastValue
 	}
 	return m, nil
@@ -441,39 +527,16 @@ func (m model) handleNavigationInput(mapping mappings.Mapping) (tea.Model, tea.C
 			m.recordingFilename = fmt.Sprintf("recording_%s.wav", time.Now().Format("20060102_150405"))
 			m.audio.Record(m.recordingFilename)
 		} else {
-			// Stop recording and add the new file to the list
+			// Stop recording and prompt for filename
 			m.recording = false
 			m.audio.StopRecording()
 			if m.recordingFilename != "" {
-				// Find the largest midi note and add 1
-				maxNote := wavfile.FindMaxMidiNote((*m.files))
-				// Load metadata for the new recording
-				metadata, err := wavfile.ReadMetadata(m.recordingFilename)
-				if err != nil {
-					metadata = nil
-				}
-				endFrame := 0
-				if metadata != nil {
-					endFrame = metadata.NumFrames - 1
-				}
-				*m.files = append(*m.files, wavfile.WavFile{
-					Name:        m.recordingFilename,
-					MidiChannel: 1,
-					MidiNote:    maxNote + 1,
-					StartFrame:  0,
-					EndFrame:    endFrame,
-					Metadata:    metadata,
-					Loading:     false,
-				})
-				playerId, err := m.audio.CreatePlayer(m.recordingFilename)
-				if err != nil {
-					panic(err)
-				}
-				(*m.files)[len(*m.files)-1].PlayerId = playerId
-				// Select the newly added file
-				m.cursor = len(*m.files) - 1
-				m.scrollToSelection() // This will call updateMarkerStepSize()
-				m.recordingFilename = ""
+				// Enter renaming mode to prompt user for new filename
+				m.renamingRecording = true
+				m.editing = true
+				m.editField = "filename"
+				// Pre-fill with base name without extension and timestamp
+				m.editValue = "recording"
 			}
 		}
 

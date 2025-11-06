@@ -110,6 +110,17 @@ func (m model) View() string {
 		b.WriteString(renderLevelMeter(m.decibelLevel, 50) + "\n")
 	}
 
+	// Display filename input prompt when renaming recording
+	if m.renamingRecording && m.editing && m.editField == "filename" {
+		promptStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("33")).
+			Bold(true)
+		b.WriteString(promptStyle.Render("Enter filename: "))
+		b.WriteString(editingStyle.Render(m.editValue + "_"))
+		b.WriteString(".wav\n")
+		b.WriteString("(Press Enter to save, Esc to keep timestamp)\n")
+	}
+
 	// Display error message if present
 	if m.currentError != "" {
 		errorStyle := lipgloss.NewStyle().

@@ -18,6 +18,7 @@ const (
 	Escape
 	Backspace
 	NumberInput
+	TextInput
 	Recording
 	MarkerLeft
 	MarkerRight
@@ -59,6 +60,11 @@ func processEditingKey(keyStr string) Mapping {
 		// Check if it's a number
 		if len(keyStr) == 1 && keyStr[0] >= '0' && keyStr[0] <= '9' {
 			return Mapping{Command: NumberInput, LastValue: keyStr}
+		}
+		// Check if it's a letter or underscore (valid for filenames)
+		if len(keyStr) == 1 && ((keyStr[0] >= 'a' && keyStr[0] <= 'z') ||
+			(keyStr[0] >= 'A' && keyStr[0] <= 'Z') || keyStr[0] == '_') {
+			return Mapping{Command: TextInput, LastValue: keyStr}
 		}
 		return Mapping{Command: Unknown, LastValue: keyStr}
 	}
