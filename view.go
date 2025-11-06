@@ -40,6 +40,20 @@ func (m model) View() string {
 				cursor = "> "
 			}
 
+			// Display corrupted files differently
+			if file.Corrupted {
+				corruptedStyle := lipgloss.NewStyle().
+					Foreground(lipgloss.Color("240")).
+					Italic(true)
+				name := file.Name
+				if len(name) > 38 {
+					name = name[:35] + "..."
+				}
+				line := fmt.Sprintf("%s%-40s  [corrupted]", cursor, name)
+				listContent.WriteString(fmt.Sprintf("  %s\n", corruptedStyle.Render(line)))
+				continue
+			}
+
 			channelStr := fmt.Sprintf("%d", file.MidiChannel)
 			noteStr := fmt.Sprintf("%d", file.MidiNote)
 			pitchStr := fmt.Sprintf("%d", file.Pitch)

@@ -168,27 +168,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.decibelLevel = msg.Level
 		return m, nil
 	case wavfile.MetadataLoadedMsg:
-		if msg.Err != nil {
-			m.SetCurrentError(fmt.Sprintf("Error loading metadata for %s: %v", msg.Filename, msg.Err))
-			return m, nil
-		}
-		// Find the WavFile with matching name and attach metadata
+		// Find the WavFile with matching name
 		for i := range *m.files {
 			if (*m.files)[i].Name == msg.Filename {
-				if msg.Err == nil {
-					(*m.files)[i].Metadata = msg.Metadata
-					// Set EndFrame to the end of the file
-					if msg.Metadata != nil {
-						(*m.files)[i].EndFrame = msg.Metadata.NumFrames - 1
-					}
+				(*m.files)[i].Loading = false
+
+				if msg.Err != nil {
+					// Mark file as corrupted
+					(*m.files)[i].Corrupted = true
+					break
 				}
+
+				// Attach metadata
+				(*m.files)[i].Metadata = msg.Metadata
+				// Set EndFrame to the end of the file
+				if msg.Metadata != nil {
+					(*m.files)[i].EndFrame = msg.Metadata.NumFrames - 1
+				}
+
 				// Create player and load buffer for low-latency playback
 				playerId, err := m.audio.CreatePlayer((*m.files)[i].Name)
 				if err != nil {
-					panic(err)
+					// Mark as corrupted if player creation fails
+					(*m.files)[i].Corrupted = true
+					break
 				}
 				(*m.files)[i].PlayerId = playerId
-				(*m.files)[i].Loading = false
+
 				// Update marker step size if this is the currently selected file
 				if i == m.cursor {
 					m.updateMarkerStepSize()
@@ -210,6 +216,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if allLoaded {
 			if err := m.audio.Start(); err != nil {
 				panic(err)
+			}
+
+			// Position cursor on first non-corrupted file
+			if m.cursor >= 0 && m.cursor < len(*m.files) && (*m.files)[m.cursor].Corrupted {
+				// Find first non-corrupted file
+				for i := 0; i < len(*m.files); i++ {
+					if !(*m.files)[i].Corrupted {
+						m.cursor = i
+						break
+					}
+				}
 			}
 		}
 
@@ -370,14 +387,26 @@ func (m model) handleNavigationInput(mapping mappings.Mapping) (tea.Model, tea.C
 
 	case mappings.CursorUp:
 		if !m.recording && m.cursor > 0 {
-			m.cursor--
-			m.scrollToSelection()
+			// Move up, skipping corrupted files
+			for newCursor := m.cursor - 1; newCursor >= 0; newCursor-- {
+				if !(*m.files)[newCursor].Corrupted {
+					m.cursor = newCursor
+					m.scrollToSelection()
+					break
+				}
+			}
 		}
 
 	case mappings.CursorDown:
 		if !m.recording && m.cursor < len((*m.files))-1 {
-			m.cursor++
-			m.scrollToSelection()
+			// Move down, skipping corrupted files
+			for newCursor := m.cursor + 1; newCursor < len(*m.files); newCursor++ {
+				if !(*m.files)[newCursor].Corrupted {
+					m.cursor = newCursor
+					m.scrollToSelection()
+					break
+				}
+			}
 		}
 
 	case mappings.EditChannel:

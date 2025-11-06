@@ -34,6 +34,7 @@ type Metadata struct {
 type WavFile struct {
 	PlayingCount    int // Reference count of active playbacks
 	Loading         bool
+	Corrupted       bool // True if file is unreadable or corrupted
 	MidiChannel     int
 	MidiNote        int
 	Pitch           int    // Pitch shift in semitones (-12 to 12)
