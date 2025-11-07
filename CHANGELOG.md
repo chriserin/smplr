@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## [v0.1.0-alpha.8](https://github.com/chriserin/smplr/compare/v0.1.0-alpha.7...v0.1.0-alpha.8) (2025-11-06)
+
+### Features
+
+* Remove non-existent file from list? [bf081bd](https://github.com/chriserin/smplr/commit/bf081bd) 
+* Name the file after recording [93d17c3](https://github.com/chriserin/smplr/commit/93d17c3) 
+* Handle unreadable files intentionally [45521c0](https://github.com/chriserin/smplr/commit/45521c0) 
+* cleanup file if quit while record [bdf01f8](https://github.com/chriserin/smplr/commit/bdf01f8) 
+* display audio meter while recording [e10d17a](https://github.com/chriserin/smplr/commit/e10d17a) 
+* reload wav file after trim [4fb65c7](https://github.com/chriserin/smplr/commit/4fb65c7) 
+### Fixes
+
+No bug fixes.
+
+
 ## [v0.1.0-alpha.7](https://github.com/chriserin/smplr/compare/v0.1.0-alpha.6...v0.1.0-alpha.7) (2025-11-05)
 
 ### Features
