@@ -440,6 +440,13 @@ func (m model) handleEditingInput(mapping mappings.Mapping) (tea.Model, tea.Cmd)
 					if err != nil {
 						panic(err)
 					}
+					if len(*m.files) == 1 {
+						//NOTE: Ensure audio is started in case this is the first file
+						err = m.audio.Start()
+						if err != nil {
+							panic(err)
+						}
+					}
 					(*m.files)[len(*m.files)-1].PlayerId = playerId
 					// Select the newly added file
 					m.cursor = len(*m.files) - 1
