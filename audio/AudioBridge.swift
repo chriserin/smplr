@@ -260,9 +260,12 @@ class SystemAudioRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
         var length: Int = 0
         var dataPointer: UnsafeMutablePointer<Int8>?
 
-        guard CMBlockBufferGetDataPointer(blockBuffer, atOffset: 0, lengthAtOffsetOut: nil,
-                                         totalLengthOut: &length, dataPointerOut: &dataPointer) == noErr,
-              let data = dataPointer else {
+        guard
+            CMBlockBufferGetDataPointer(
+                blockBuffer, atOffset: 0, lengthAtOffsetOut: nil,
+                totalLengthOut: &length, dataPointerOut: &dataPointer) == noErr,
+            let data = dataPointer
+        else {
             return -160.0
         }
 

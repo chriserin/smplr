@@ -46,7 +46,7 @@ type model struct {
 	activeMarker      string // "start" or "end"
 	currentError      string // error message to display
 	logger            *log.Logger
-	renamingRecording bool   // true when prompting for filename after recording
+	renamingRecording bool // true when prompting for filename after recording
 }
 
 func initialModel(files *[]wavfile.WavFile, audio audio.Audio) model {
@@ -211,19 +211,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Check if all files have finished loading
 		allLoaded := true
+		oneLoaded := false
 		for i := range *m.files {
+			if !(*m.files)[i].Loading && !(*m.files)[i].Corrupted {
+				oneLoaded = true
+			}
 			if (*m.files)[i].Loading {
 				allLoaded = false
 				break
 			}
 		}
 
-		// If all files are loaded, start the audio engine
-		if allLoaded {
+		if oneLoaded {
 			if err := m.audio.Start(); err != nil {
 				panic(err)
 			}
+		}
 
+		if allLoaded {
 			// Position cursor on first non-corrupted file
 			if m.cursor >= 0 && m.cursor < len(*m.files) && (*m.files)[m.cursor].Corrupted {
 				// Find first non-corrupted file
@@ -634,9 +639,10 @@ func (m model) handleNavigationInput(mapping mappings.Mapping) (tea.Model, tea.C
 			// No real-time pitch shifting - files are pre-rendered
 			err := m.audio.PlayFile((*m.files)[m.cursor].PlayerId, filename, 0)
 			if err != nil {
-				panic("Error playing file from update: " + err.Error())
+				m.SetCurrentError("Error playing file: " + err.Error())
+			} else {
+				(*m.files)[m.cursor].PlayingCount++
 			}
-			(*m.files)[m.cursor].PlayingCount++
 		}
 
 	case mappings.PlayRegion:

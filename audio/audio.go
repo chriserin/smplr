@@ -362,7 +362,7 @@ func (a *StubAudio) TrimFile(filename string, startFrame int, endFrame int) erro
 }
 
 // SwiftAudio is a Swift bridge implementation of the Audio interface
-type SwiftAudio struct{}
+type SwiftAudio struct{ Started bool }
 
 // NewSwiftAudio creates a new Swift audio implementation
 func NewSwiftAudio() *SwiftAudio {
@@ -380,10 +380,14 @@ func (a *SwiftAudio) Init() error {
 
 // Start starts the Swift audio engine
 func (a *SwiftAudio) Start() error {
+	if a.Started {
+		return nil // Already started
+	}
 	result := C.SwiftAudio_start()
 	if result != 0 {
 		return fmt.Errorf("failed to start audio engine")
 	}
+	a.Started = true
 	return nil
 }
 
@@ -440,6 +444,9 @@ func (a *SwiftAudio) StopRecording() error {
 
 // PlayFile plays the entire audio file
 func (a *SwiftAudio) PlayFile(playerID int, filename string, cents float32) error {
+	if !a.Started {
+		return fmt.Errorf("audio engine not started")
+	}
 	cFilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cFilename))
 
@@ -452,6 +459,9 @@ func (a *SwiftAudio) PlayFile(playerID int, filename string, cents float32) erro
 
 // PlayRegion plays a region of the audio file from startFrame to endFrame
 func (a *SwiftAudio) PlayRegion(playerID int, filename string, startFrame int, endFrame int, cents float32) error {
+	if !a.Started {
+		return fmt.Errorf("audio engine not started")
+	}
 	cFilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cFilename))
 
