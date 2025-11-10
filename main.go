@@ -13,7 +13,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const VERSION = "v0.1.0-alpha.8"
+const VERSION = "v0.1.0-alpha.9"
 
 // DecibelLevelMsg is sent when recording decibel levels are updated
 type DecibelLevelMsg struct {

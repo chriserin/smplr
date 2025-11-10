@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [v0.1.0-alpha.9](https://github.com/chriserin/smplr/compare/v0.1.0-alpha.8...v0.1.0-alpha.9) (2025-11-10)
+
+### Features
+
+* Ensure engine is started if first file [e5e1f56](https://github.com/chriserin/smplr/commit/e5e1f56) 
+* Start engine if just one file is loaded [50ac0a1](https://github.com/chriserin/smplr/commit/50ac0a1) 
+### Fixes
+
+No bug fixes.
+
+
 ## [v0.1.0-alpha.8](https://github.com/chriserin/smplr/compare/v0.1.0-alpha.7...v0.1.0-alpha.8) (2025-11-06)
 
 ### Features
