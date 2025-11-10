@@ -70,7 +70,7 @@ func (p *Player) playNote(channel uint8, note uint8) {
 	for i := range *p.files {
 		file := &(*p.files)[i]
 		if file.MidiChannel == midiChannel && file.MidiNote == midiNote {
-			if file.Metadata != nil {
+			if file.Metadata != nil && !file.Corrupted {
 				// Stop and restart if already playing
 				if file.PlayingCount > 0 {
 					p.audio.StopPlayer(file.PlayerId)
