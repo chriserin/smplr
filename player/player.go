@@ -88,7 +88,7 @@ func removeTrigger(channel uint8, note uint8) {
 
 func delayedRemoveTrigger(channel uint8, note uint8) {
 	// NOTE: triggers are ~20 millis so give it some grace time before eliminating the trigger possibility
-	time.AfterFunc(20*time.Millisecond, func() {
+	time.AfterFunc(26*time.Millisecond, func() {
 		removeTrigger(channel, note)
 	})
 }
