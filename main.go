@@ -42,9 +42,16 @@ var infoCmd = &cobra.Command{
 	Run:   runInfo,
 }
 
+var devicesCmd = &cobra.Command{
+	Use:   "devices",
+	Short: "List available audio output devices",
+	Run:   runDevices,
+}
+
 func init() {
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(infoCmd)
+	rootCmd.AddCommand(devicesCmd)
 }
 
 func main() {
@@ -70,6 +77,30 @@ func runInfo(cmd *cobra.Command, args []string) {
 	fmt.Printf("Frames: %d\n", metadata.NumFrames)
 	fmt.Printf("Duration: %.2f seconds\n", metadata.Duration)
 	fmt.Printf("Waveform Segments: %d\n", len(metadata.WaveformData.Peaks))
+}
+
+func runDevices(cmd *cobra.Command, args []string) {
+	audioApi := audio.NewSwiftAudio()
+	if err := audioApi.Init(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing audio: %v\n", err)
+		os.Exit(1)
+	}
+
+	devices, err := audioApi.GetAudioDevices()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting audio devices: %v\n", err)
+		os.Exit(1)
+	}
+
+	if len(devices) == 0 {
+		fmt.Println("No audio devices found")
+		return
+	}
+
+	fmt.Println("Available audio devices:")
+	for _, device := range devices {
+		fmt.Printf("  %s - %s\n", device.ID, device.Name)
+	}
 }
 
 func runSampler(cmd *cobra.Command, args []string) {

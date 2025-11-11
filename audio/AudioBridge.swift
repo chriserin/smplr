@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreAudio
 import Foundation
 import ScreenCaptureKit
 
@@ -714,4 +715,96 @@ public func SwiftAudio_renderPitchedFile(
         print("Error rendering pitched file: \(error)")
         return 1
     }
+}
+
+@_cdecl("SwiftAudio_getAudioDevices")
+public func SwiftAudio_getAudioDevices() -> UnsafeMutablePointer<CChar>? {
+    var result = ""
+
+    #if os(macOS)
+    // Get all audio devices
+    var propertySize: UInt32 = 0
+    var propertyAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyDevices,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+    )
+
+    var status = AudioObjectGetPropertyDataSize(
+        AudioObjectID(kAudioObjectSystemObject),
+        &propertyAddress,
+        0,
+        nil,
+        &propertySize
+    )
+
+    guard status == noErr else {
+        return strdup("")
+    }
+
+    let deviceCount = Int(propertySize) / MemoryLayout<AudioDeviceID>.size
+    var deviceIDs = [AudioDeviceID](repeating: 0, count: deviceCount)
+
+    status = AudioObjectGetPropertyData(
+        AudioObjectID(kAudioObjectSystemObject),
+        &propertyAddress,
+        0,
+        nil,
+        &propertySize,
+        &deviceIDs
+    )
+
+    guard status == noErr else {
+        return strdup("")
+    }
+
+    // Filter for output devices and get their names
+    for deviceID in deviceIDs {
+        // Check if device has output streams
+        var streamPropertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyStreams,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var streamPropertySize: UInt32 = 0
+        status = AudioObjectGetPropertyDataSize(
+            deviceID,
+            &streamPropertyAddress,
+            0,
+            nil,
+            &streamPropertySize
+        )
+
+        // Skip if no output streams
+        guard status == noErr && streamPropertySize > 0 else {
+            continue
+        }
+
+        // Get device name
+        var namePropertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioObjectPropertyName,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var namePropertySize: UInt32 = UInt32(MemoryLayout<CFString?>.size)
+        var deviceName: Unmanaged<CFString>?
+
+        status = AudioObjectGetPropertyData(
+            deviceID,
+            &namePropertyAddress,
+            0,
+            nil,
+            &namePropertySize,
+            &deviceName
+        )
+
+        if status == noErr, let name = deviceName?.takeUnretainedValue() as String? {
+            result += "\(deviceID)|\(name)\n"
+        }
+    }
+    #endif
+
+    return strdup(result)
 }

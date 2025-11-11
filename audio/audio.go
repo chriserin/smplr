@@ -43,6 +43,7 @@ extern int SwiftAudio_trimFile(const char* filename, int startFrame, int endFram
 extern int SwiftAudio_renderPitchedFile(const char* sourceFilename, const char* targetFilename, float cents);
 extern void SwiftAudio_setCompletionCallback(void (*callback)(int));
 extern void SwiftAudio_setDecibelCallback(void (*callback)(float));
+extern char* SwiftAudio_getAudioDevices(void);
 */
 import "C"
 import (
@@ -50,6 +51,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"unsafe"
 )
 
@@ -87,6 +89,12 @@ func SetDecibelLevelChannel(ch chan float32) {
 	C.SwiftAudio_setDecibelCallback((*[0]byte)(callbackPtr))
 }
 
+// AudioDevice represents an audio output device
+type AudioDevice struct {
+	ID   string
+	Name string
+}
+
 // Audio defines the interface for audio recording and playback operations
 // This will eventually be implemented as a bridge to Swift code using MacOS AV API
 type Audio interface {
@@ -101,6 +109,7 @@ type Audio interface {
 	PlayRegion(playerID int, filename string, startFrame int, endFrame int, cents float32) error
 	TrimFile(filename string, startFrame int, endFrame int) error
 	RenderPitchedFile(sourceFilename string, targetFilename string, cents float32) error
+	GetAudioDevices() ([]AudioDevice, error)
 }
 
 // StubAudio is a stub implementation of the Audio interface
@@ -231,6 +240,15 @@ func (a *StubAudio) RenderPitchedFile(sourceFilename string, targetFilename stri
 
 	_, err = io.Copy(dstFile, srcFile)
 	return err
+}
+
+// GetAudioDevices returns a list of available audio output devices
+func (a *StubAudio) GetAudioDevices() ([]AudioDevice, error) {
+	// Stub implementation - return fake devices
+	return []AudioDevice{
+		{ID: "stub-device-1", Name: "Stub Audio Device 1"},
+		{ID: "stub-device-2", Name: "Stub Audio Device 2"},
+	}, nil
 }
 
 // TrimFile rewrites the audio file to only contain frames from startFrame to endFrame
@@ -497,4 +515,35 @@ func (a *SwiftAudio) RenderPitchedFile(sourceFilename string, targetFilename str
 		return fmt.Errorf("failed to render pitched file")
 	}
 	return nil
+}
+
+// GetAudioDevices returns a list of available audio output devices
+func (a *SwiftAudio) GetAudioDevices() ([]AudioDevice, error) {
+	cDevices := C.SwiftAudio_getAudioDevices()
+	if cDevices == nil {
+		return nil, fmt.Errorf("failed to get audio devices")
+	}
+	defer C.free(unsafe.Pointer(cDevices))
+
+	devicesStr := C.GoString(cDevices)
+	if devicesStr == "" {
+		return []AudioDevice{}, nil
+	}
+
+	var devices []AudioDevice
+	lines := strings.Split(strings.TrimSpace(devicesStr), "\n")
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "|", 2)
+		if len(parts) == 2 {
+			devices = append(devices, AudioDevice{
+				ID:   parts[0],
+				Name: parts[1],
+			})
+		}
+	}
+
+	return devices, nil
 }
