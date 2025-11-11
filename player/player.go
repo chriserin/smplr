@@ -3,6 +3,8 @@ package player
 import (
 	"smplr/audio"
 	"smplr/wavfile"
+	"sync"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"gitlab.com/gomidi/midi/v2"
@@ -62,6 +64,35 @@ func (p *Player) playerLoop() {
 	}
 }
 
+type trigger struct {
+	channel uint8
+	note    uint8
+}
+
+var possibleTriggers = map[trigger]struct{}{}
+var possibleTriggersMutex = sync.Mutex{}
+
+func addTrigger(channel uint8, note uint8) {
+	possibleTriggersMutex.Lock()
+	defer possibleTriggersMutex.Unlock()
+	trig := trigger{channel: channel, note: note}
+	possibleTriggers[trig] = struct{}{}
+}
+
+func removeTrigger(channel uint8, note uint8) {
+	possibleTriggersMutex.Lock()
+	defer possibleTriggersMutex.Unlock()
+	trig := trigger{channel: channel, note: note}
+	delete(possibleTriggers, trig)
+}
+
+func delayedRemoveTrigger(channel uint8, note uint8) {
+	// NOTE: triggers are ~20 millis so give it some grace time before eliminating the trigger possibility
+	time.AfterFunc(20*time.Millisecond, func() {
+		removeTrigger(channel, note)
+	})
+}
+
 // playNote finds and plays the WAV file matching the MIDI channel and note
 func (p *Player) playNote(channel uint8, note uint8) {
 	midiChannel := int(channel) + 1
@@ -85,6 +116,9 @@ func (p *Player) playNote(channel uint8, note uint8) {
 				err := p.audio.PlayRegion(file.PlayerId, filename, file.StartFrame, file.EndFrame, 0)
 				if err != nil {
 					panic("Error playing region: " + err.Error())
+				} else {
+					addTrigger(channel, note)
+					delayedRemoveTrigger(channel, note)
 				}
 				p.sendFn(wavfile.PlaybackStartedMsg{Filename: file.Name})
 			}
@@ -97,6 +131,12 @@ func (p *Player) playNote(channel uint8, note uint8) {
 func (p *Player) stopNote(channel uint8, note uint8) {
 	midiChannel := int(channel) + 1
 	midiNote := int(note)
+
+	if _, exists := possibleTriggers[trigger{channel: channel, note: note}]; exists {
+		// If this note-off corresponds to a recent note-on, ignore it
+		removeTrigger(channel, note)
+		return
+	}
 
 	for i := range *p.files {
 		file := &(*p.files)[i]
