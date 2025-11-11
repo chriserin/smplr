@@ -39,6 +39,7 @@ type model struct {
 	recordingFilename string
 	decibelLevel      float32 // current recording level in dB
 	audio             audio.Audio
+	audioDevice       string // audio output device name
 	viewport          viewport.Model
 	ready             bool
 	windowWidth       int
@@ -49,7 +50,7 @@ type model struct {
 	renamingRecording bool // true when prompting for filename after recording
 }
 
-func initialModel(files *[]wavfile.WavFile, audio audio.Audio) model {
+func initialModel(files *[]wavfile.WavFile, audio audio.Audio, audioDevice string) model {
 	vp := viewport.New(80, 10)
 	vp.YPosition = 0
 
@@ -72,6 +73,7 @@ func initialModel(files *[]wavfile.WavFile, audio audio.Audio) model {
 		recording:         false,
 		recordingFilename: "",
 		audio:             audio,
+		audioDevice:       audioDevice,
 		viewport:          vp,
 		ready:             false,
 		windowWidth:       80,
@@ -223,7 +225,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if oneLoaded {
-			if err := m.audio.Start(); err != nil {
+			if err := m.audio.Start(m.audioDevice); err != nil {
 				panic(err)
 			}
 		}
@@ -442,7 +444,7 @@ func (m model) handleEditingInput(mapping mappings.Mapping) (tea.Model, tea.Cmd)
 					}
 					if len(*m.files) == 1 {
 						//NOTE: Ensure audio is started in case this is the first file
-						err = m.audio.Start()
+						err = m.audio.Start(m.audioDevice)
 						if err != nil {
 							panic(err)
 						}

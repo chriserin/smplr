@@ -15,12 +15,102 @@ class AudioEngineManager {
     private var players: [Int32: AVAudioPlayerNode] = [:]
     private var playerBuffers: [Int32: AVAudioPCMBuffer] = [:]
     private var nextPlayerID: Int32 = 1
+    private var deviceID: AudioDeviceID?
 
     init() {
         engine = AVAudioEngine()
     }
 
-    func start() throws {
+    // Helper function to find audio device by name
+    private static func findDeviceByName(_ name: String) -> AudioDeviceID? {
+        var propertySize: UInt32 = 0
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var status = AudioObjectGetPropertyDataSize(
+            AudioObjectID(kAudioObjectSystemObject),
+            &propertyAddress,
+            0,
+            nil,
+            &propertySize
+        )
+
+        guard status == noErr else { return nil }
+
+        let deviceCount = Int(propertySize) / MemoryLayout<AudioDeviceID>.size
+        var deviceIDs = [AudioDeviceID](repeating: 0, count: deviceCount)
+
+        status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &propertyAddress,
+            0,
+            nil,
+            &propertySize,
+            &deviceIDs
+        )
+
+        guard status == noErr else { return nil }
+
+        // Search for device with matching name
+        for deviceID in deviceIDs {
+            var namePropertyAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioObjectPropertyName,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+
+            var namePropertySize: UInt32 = UInt32(MemoryLayout<CFString?>.size)
+            var deviceName: Unmanaged<CFString>?
+
+            status = AudioObjectGetPropertyData(
+                deviceID,
+                &namePropertyAddress,
+                0,
+                nil,
+                &namePropertySize,
+                &deviceName
+            )
+
+            if status == noErr, let devName = deviceName?.takeUnretainedValue() as String? {
+                if devName == name {
+                    return deviceID
+                }
+            }
+        }
+
+        return nil
+    }
+
+    func start(deviceName: String) throws {
+        // Look up and configure output device if specified
+        if !deviceName.isEmpty {
+            if let deviceID = AudioEngineManager.findDeviceByName(deviceName) {
+                let outputNode = engine.outputNode
+                let audioUnit = outputNode.audioUnit
+
+                var deviceIDCopy = deviceID
+                let status = AudioUnitSetProperty(
+                    audioUnit!,
+                    kAudioOutputUnitProperty_CurrentDevice,
+                    kAudioUnitScope_Global,
+                    0,
+                    &deviceIDCopy,
+                    UInt32(MemoryLayout<AudioDeviceID>.size)
+                )
+
+                if status != noErr {
+                    print("Warning: Failed to set audio output device (error: \(status))")
+                }
+            } else {
+                print(
+                    "Warning: Could not find audio device with name '\(deviceName)', using default device"
+                )
+            }
+        }
+
         if !engine.isRunning {
             try engine.start()
         }
@@ -398,14 +488,21 @@ public func SwiftAudio_init() -> Int32 {
 }
 
 @_cdecl("SwiftAudio_start")
-public func SwiftAudio_start() -> Int32 {
+public func SwiftAudio_start(_ deviceName: UnsafePointer<CChar>?) -> Int32 {
     guard let manager = gAudioEngineManager else {
         print("Error: Audio engine not initialized. Call Init() first.")
         return 1
     }
 
+    let deviceNameStr: String
+    if let deviceName = deviceName {
+        deviceNameStr = String(cString: deviceName)
+    } else {
+        deviceNameStr = ""
+    }
+
     do {
-        try manager.start()
+        try manager.start(deviceName: deviceNameStr)
         return 0
     } catch {
         print("Error starting audio engine: \(error)")
@@ -722,88 +819,88 @@ public func SwiftAudio_getAudioDevices() -> UnsafeMutablePointer<CChar>? {
     var result = ""
 
     #if os(macOS)
-    // Get all audio devices
-    var propertySize: UInt32 = 0
-    var propertyAddress = AudioObjectPropertyAddress(
-        mSelector: kAudioHardwarePropertyDevices,
-        mScope: kAudioObjectPropertyScopeGlobal,
-        mElement: kAudioObjectPropertyElementMain
-    )
-
-    var status = AudioObjectGetPropertyDataSize(
-        AudioObjectID(kAudioObjectSystemObject),
-        &propertyAddress,
-        0,
-        nil,
-        &propertySize
-    )
-
-    guard status == noErr else {
-        return strdup("")
-    }
-
-    let deviceCount = Int(propertySize) / MemoryLayout<AudioDeviceID>.size
-    var deviceIDs = [AudioDeviceID](repeating: 0, count: deviceCount)
-
-    status = AudioObjectGetPropertyData(
-        AudioObjectID(kAudioObjectSystemObject),
-        &propertyAddress,
-        0,
-        nil,
-        &propertySize,
-        &deviceIDs
-    )
-
-    guard status == noErr else {
-        return strdup("")
-    }
-
-    // Filter for output devices and get their names
-    for deviceID in deviceIDs {
-        // Check if device has output streams
-        var streamPropertyAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyStreams,
-            mScope: kAudioDevicePropertyScopeOutput,
-            mElement: kAudioObjectPropertyElementMain
-        )
-
-        var streamPropertySize: UInt32 = 0
-        status = AudioObjectGetPropertyDataSize(
-            deviceID,
-            &streamPropertyAddress,
-            0,
-            nil,
-            &streamPropertySize
-        )
-
-        // Skip if no output streams
-        guard status == noErr && streamPropertySize > 0 else {
-            continue
-        }
-
-        // Get device name
-        var namePropertyAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioObjectPropertyName,
+        // Get all audio devices
+        var propertySize: UInt32 = 0
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
 
-        var namePropertySize: UInt32 = UInt32(MemoryLayout<CFString?>.size)
-        var deviceName: Unmanaged<CFString>?
-
-        status = AudioObjectGetPropertyData(
-            deviceID,
-            &namePropertyAddress,
+        var status = AudioObjectGetPropertyDataSize(
+            AudioObjectID(kAudioObjectSystemObject),
+            &propertyAddress,
             0,
             nil,
-            &namePropertySize,
-            &deviceName
+            &propertySize
         )
 
-        if status == noErr, let name = deviceName?.takeUnretainedValue() as String? {
-            result += "\(deviceID)|\(name)\n"
+        guard status == noErr else {
+            return strdup("")
         }
-    }
+
+        let deviceCount = Int(propertySize) / MemoryLayout<AudioDeviceID>.size
+        var deviceIDs = [AudioDeviceID](repeating: 0, count: deviceCount)
+
+        status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &propertyAddress,
+            0,
+            nil,
+            &propertySize,
+            &deviceIDs
+        )
+
+        guard status == noErr else {
+            return strdup("")
+        }
+
+        // Filter for output devices and get their names
+        for deviceID in deviceIDs {
+            // Check if device has output streams
+            var streamPropertyAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyStreams,
+                mScope: kAudioDevicePropertyScopeOutput,
+                mElement: kAudioObjectPropertyElementMain
+            )
+
+            var streamPropertySize: UInt32 = 0
+            status = AudioObjectGetPropertyDataSize(
+                deviceID,
+                &streamPropertyAddress,
+                0,
+                nil,
+                &streamPropertySize
+            )
+
+            // Skip if no output streams
+            guard status == noErr && streamPropertySize > 0 else {
+                continue
+            }
+
+            // Get device name
+            var namePropertyAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioObjectPropertyName,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+
+            var namePropertySize: UInt32 = UInt32(MemoryLayout<CFString?>.size)
+            var deviceName: Unmanaged<CFString>?
+
+            status = AudioObjectGetPropertyData(
+                deviceID,
+                &namePropertyAddress,
+                0,
+                nil,
+                &namePropertySize,
+                &deviceName
+            )
+
+            if status == noErr, let name = deviceName?.takeUnretainedValue() as String? {
+                result += "\(deviceID)|\(name)\n"
+            }
+        }
     #endif
 
     return strdup(result)

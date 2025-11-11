@@ -31,7 +31,7 @@ static void* getCDecibelLevelCallback() {
 
 // Declare Swift functions
 extern int SwiftAudio_init(void);
-extern int SwiftAudio_start(void);
+extern int SwiftAudio_start(const char* deviceName);
 extern int SwiftAudio_createPlayer(const char* filename);
 extern int SwiftAudio_destroyPlayer(int playerID);
 extern int SwiftAudio_stopPlayer(int playerID);
@@ -99,7 +99,7 @@ type AudioDevice struct {
 // This will eventually be implemented as a bridge to Swift code using MacOS AV API
 type Audio interface {
 	Init() error
-	Start() error
+	Start(deviceName string) error
 	CreatePlayer(filename string) (int, error)
 	DestroyPlayer(playerID int) error
 	StopPlayer(playerID int) error
@@ -133,7 +133,7 @@ func (a *StubAudio) Init() error {
 }
 
 // Start starts the stub audio system
-func (a *StubAudio) Start() error {
+func (a *StubAudio) Start(deviceName string) error {
 	// Stub implementation - nothing to start
 	return nil
 }
@@ -397,11 +397,14 @@ func (a *SwiftAudio) Init() error {
 }
 
 // Start starts the Swift audio engine
-func (a *SwiftAudio) Start() error {
+func (a *SwiftAudio) Start(deviceName string) error {
 	if a.Started {
 		return nil // Already started
 	}
-	result := C.SwiftAudio_start()
+	cDeviceName := C.CString(deviceName)
+	defer C.free(unsafe.Pointer(cDeviceName))
+
+	result := C.SwiftAudio_start(cDeviceName)
 	if result != 0 {
 		return fmt.Errorf("failed to start audio engine")
 	}

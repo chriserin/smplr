@@ -20,6 +20,10 @@ type DecibelLevelMsg struct {
 	Level float32
 }
 
+var (
+	audioDevice string
+)
+
 var rootCmd = &cobra.Command{
 	Use:   "smplr",
 	Short: "A MIDI-controlled audio sampler with a terminal UI",
@@ -49,6 +53,7 @@ var devicesCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.PersistentFlags().StringVar(&audioDevice, "device", "", "Audio output device name (use 'smplr devices' to list available devices)")
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(infoCmd)
 	rootCmd.AddCommand(devicesCmd)
@@ -109,7 +114,7 @@ func runSampler(cmd *cobra.Command, args []string) {
 	files := wavfile.LoadFiles(metadataChan)
 	audioApi := audio.NewSwiftAudio()
 	// Create program with initial model
-	m := initialModel(&files, audioApi)
+	m := initialModel(&files, audioApi, audioDevice)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	audioApi.Init()
 
